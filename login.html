@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connexion — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container">
+  <div class="form-card">
+    <h2 style="text-align:center">Connexion</h2>
+    <div class="field"><label>E-mail</label><input id="email" type="email" placeholder="toi@exemple.com"></div>
+    <div class="field"><label>Mot de passe</label><input id="pwd" type="password" placeholder="••••••••"></div>
+    <button class="btn btn-primary btn-block" id="loginBtn">Se connecter</button>
+    <p id="err" style="color:#ff7070;font-size:.8rem;text-align:center;margin-top:10px"></p>
+    <div class="form-foot">Pas encore de compte ? <a href="register.html">S'inscrire</a></div>
+    <div class="form-foot" style="margin-top:6px">Démo : connecte-toi instantanément en tant que <a href="#" id="quickLogin">Toi</a>, <a href="#" id="quickLoginPro">Vice King (statut Yacht)</a> ou <a href="#" id="quickLoginBrand">Nexdrift (marque)</a></div>
+  </div>
+</main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+const db = loadDB();
+
+function doLogin(userId){
+  setSession(userId);
+  toast('Connecté.');
+  setTimeout(()=> location.href='index.html', 500);
+}
+
+document.getElementById('loginBtn').addEventListener('click', ()=>{
+  const email = document.getElementById('email').value.trim();
+  if(!email){ document.getElementById('err').textContent = 'Renseigne un e-mail (mode démo : tout mot de passe est accepté).'; return; }
+  doLogin('you');
+});
+document.getElementById('quickLogin').addEventListener('click', (e)=>{ e.preventDefault(); doLogin('you'); });
+document.getElementById('quickLoginPro').addEventListener('click', (e)=>{ e.preventDefault(); doLogin('vice_king'); });
+document.getElementById('quickLoginBrand').addEventListener('click', (e)=>{ e.preventDefault(); doLogin('nexdrift'); });
+</script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Choisir mon personnage — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section">
+  <div class="section-head">
+    <h1>🎭 Personnalise ton profil</h1>
+    <a href="profil.html" class="btn btn-outline btn-sm" id="viewProfileBtn">Voir mon profil →</a>
+  </div>
+  <p style="margin-top:-10px;max-width:640px">Choisis ton personnage et, si tu veux, un fond derrière lui. Tout devient visible partout sur The Gamer Rich — profil, classements, fil d'activité. Change d'avis quand tu veux.</p>
+
+  <div class="char-preview" id="charPreview">
+    <img id="previewImg" alt="">
+  </div>
+
+  <div class="tabs" id="customTabs">
+    <div class="tab active" data-t="character">🎭 Personnage</div>
+    <div class="tab" data-t="background">🖼️ Fond d'écran</div>
+  </div>
+
+  <div id="characterPanel">
+    <div class="char-grid" id="charGrid"></div>
+  </div>
+
+  <div id="backgroundPanel" hidden>
+    <div class="char-grid" id="bgGrid"></div>
+  </div>
+</main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+if(!currentUser()){ location.href='login.html'; }
+const db = loadDB();
+const user = currentUser(db);
+
+document.getElementById('viewProfileBtn').href = 'profil.html?u='+user.id;
+
+// Aperçu en direct : se met à jour aussitôt qu'un personnage ou un fond est
+// cliqué, sans avoir besoin d'aller sur la page profil pour voir le résultat.
+function renderPreview(){
+  const character = getCharacter(user.characterId);
+  const background = getBackground(user.backgroundId);
+  const preview = document.getElementById('charPreview');
+  preview.style.backgroundImage = background ? `url('${background.img}')` : '';
+  preview.style.backgroundSize = 'cover';
+  preview.style.backgroundPosition = 'center';
+  document.getElementById('previewImg').src = character.img;
+  document.getElementById('previewImg').alt = character.name;
+}
+
+document.querySelectorAll('#customTabs .tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('#customTabs .tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('characterPanel').hidden = t.dataset.t!=='character';
+    document.getElementById('backgroundPanel').hidden = t.dataset.t!=='background';
+  });
+});
+
+function renderCharacters(){
+  document.getElementById('charGrid').innerHTML = CHARACTERS.map(c=>{
+    const active = user.characterId===c.id;
+    return `<button type="button" class="char-card ${active?'active':''}" data-id="${c.id}">
+      <div class="char-card-img"><img src="${c.img}" alt="${c.name}" loading="lazy"></div>
+      <div class="char-card-body">
+        <div class="char-card-name">${c.name}${active? ' <span class="char-card-check">✓</span>' : ''}</div>
+        <div class="char-card-tagline">${c.tagline||''}</div>
+      </div>
+    </button>`;
+  }).join('') + `
+    ${Array.from({length: Math.max(0, 25-CHARACTERS.length)}).map(()=>`
+      <div class="char-card char-card-locked">
+        <div class="char-card-img char-card-soon">🔒</div>
+        <div class="char-card-body">
+          <div class="char-card-name">Bientôt</div>
+          <div class="char-card-tagline">Nouveau personnage à venir</div>
+        </div>
+      </div>
+    `).join('')}
+  `;
+  document.querySelectorAll('#charGrid .char-card[data-id]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const c = getCharacter(btn.dataset.id);
+      user.characterId = c.id;
+      saveDB(db);
+      toast(`${c.name} sélectionné !`);
+      renderCharacters();
+      renderPreview();
+    });
+  });
+}
+
+function renderBackgrounds(){
+  const noneCard = `<button type="button" class="char-card ${!user.backgroundId?'active':''}" data-bg="">
+    <div class="char-card-img char-card-soon">🚫</div>
+    <div class="char-card-body">
+      <div class="char-card-name">Aucun${!user.backgroundId? ' <span class="char-card-check">✓</span>' : ''}</div>
+      <div class="char-card-tagline">Fond par défaut</div>
+    </div>
+  </button>`;
+  document.getElementById('bgGrid').innerHTML = noneCard + BACKGROUNDS.map(b=>{
+    const active = user.backgroundId===b.id;
+    return `<button type="button" class="char-card ${active?'active':''}" data-bg="${b.id}">
+      <div class="char-card-img"><img src="${b.img}" alt="${b.name}" loading="lazy"></div>
+      <div class="char-card-body">
+        <div class="char-card-name">${b.name}${active? ' <span class="char-card-check">✓</span>' : ''}</div>
+      </div>
+    </button>`;
+  }).join('');
+  document.querySelectorAll('#bgGrid .char-card').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      user.backgroundId = btn.dataset.bg;
+      saveDB(db);
+      toast(btn.dataset.bg ? 'Fond appliqué !' : 'Fond retiré.');
+      renderBackgrounds();
+      renderPreview();
+    });
+  });
+}
+
+renderCharacters();
+renderBackgrounds();
+renderPreview();
+</script>
+</body>
+</html>

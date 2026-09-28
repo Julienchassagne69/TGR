@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Communauté / Crews — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section">
+  <div class="section-head">
+    <h1>Communauté &amp; crews</h1>
+    <button class="btn btn-primary btn-sm" id="createCrewBtn">+ Créer un crew</button>
+  </div>
+  <p>Rejoins un crew pour cumuler un palmarès d'équipe et progresser ensemble sur les défis sponsorisés.</p>
+
+  <div class="grid grid-3" id="crewGrid"></div>
+
+  <h2 style="margin-top:50px">Profils à découvrir</h2>
+  <div class="grid grid-4" id="peopleGrid"></div>
+</main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+const db = loadDB();
+const user = currentUser(db);
+
+document.getElementById('crewGrid').innerHTML = db.crews.map(cr=>{
+  const members = cr.members.map(id=>db.users.find(u=>u.id===id)).filter(Boolean);
+  return `<div class="card" style="padding:18px">
+    <div style="font-size:2rem">${cr.emblem}</div>
+    <h3 style="margin:8px 0 4px">${cr.name}</h3>
+    <p style="font-size:.85rem">${cr.description}</p>
+    <div style="display:flex;justify-content:space-between;font-size:.8rem;color:var(--text-faint)">
+      <span>${members.length} membres</span><span>🏆 ${cr.wins} victoires</span>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn btn-outline btn-sm joinBtn" data-id="${cr.id}" style="width:100%">Rejoindre</button>
+    </div>
+  </div>`;
+}).join('');
+
+document.querySelectorAll('.joinBtn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    if(!requireAuth()) return;
+    toast('Demande envoyée au responsable du crew.');
+  });
+});
+
+document.getElementById('createCrewBtn').addEventListener('click', ()=>{
+  if(!requireAuth()) return;
+  const name = prompt('Nom du crew :');
+  if(!name) return;
+  db.crews.push({ id:'crew'+Date.now(), name, emblem:'🎮', description:'Nouveau crew.', members:[user.id], wins:0 });
+  user.crewId = db.crews[db.crews.length-1].id;
+  saveDB(db);
+  toast('Crew créé !');
+  location.reload();
+});
+
+const others = db.users.filter(u=>u.accountType!=='brand' && (!user || u.id!==user.id)).slice(0,4);
+document.getElementById('peopleGrid').innerHTML = others.map(u=>`
+  <a href="profil.html?u=${u.id}" class="card" style="padding:18px;text-align:center">
+    <div class="rank-avatar" style="margin:0 auto 10px;width:60px;height:60px"><img src="${avatarSrc(u)}"></div>
+    <div style="font-weight:700">${u.display}</div>
+    <div style="margin:6px 0">${levelBadge(u.level)}</div>
+    <div style="font-size:.78rem;color:var(--text-faint)">${fmtNum(u.followers)} abonnés · ${u.wins} 🏆</div>
+  </a>
+`).join('');
+</script>
+</body>
+</html>

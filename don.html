@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faire un don — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section" id="page"></main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+const db = loadDB();
+const user = currentUser(db);
+const AMOUNTS = [5, 10, 25, 50, 100];
+let chosen = 10;
+
+function render(){
+  const total = totalDonations(db);
+  const top = db.donations.slice().sort((a,b)=>b.amount-a.amount).slice(0,5);
+
+  document.getElementById('page').innerHTML = `
+    <div class="gold-hero">
+      <div class="big-star">💝</div>
+      <h1 style="margin:8px 0 6px">Fais un don à The Gamer Rich</h1>
+      <p style="max-width:560px;margin:0 auto;color:var(--text-dim)">
+        Chaque don alimente la cagnotte de la plateforme : plus elle grossit, plus les sponsors et les
+        joueurs peuvent proposer des récompenses élevées sur leurs défis. Fais un don et participe —
+        les gains ne font que grandir.
+      </p>
+      <div class="pill" style="margin-top:16px;font-size:.9rem">💰 <b style="color:var(--gold)">${fmtMoney(total)}</b> reversés à la cagnotte par la communauté</div>
+    </div>
+
+    <div class="grid grid-2" style="align-items:start">
+      <div class="form-card" style="margin:0">
+        <h3 style="margin-top:0">Choisis un montant</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px" id="amountPicker">
+          ${AMOUNTS.map(a=>`<button type="button" class="btn ${a===chosen?'btn-primary':'btn-outline'} btn-sm amount-btn" data-a="${a}">${a} €</button>`).join('')}
+        </div>
+        <div class="field"><label>Ou montant libre (€)</label><input id="customAmount" type="number" min="1" value="${chosen}"></div>
+        <button type="button" class="btn btn-primary btn-block" id="donateBtn">💝 Donner ${chosen} € (démo)</button>
+        <p style="font-size:.72rem;color:var(--text-faint);margin-top:10px;text-align:center">Paiement simulé — aucune donnée bancaire n'est demandée sur ce prototype.</p>
+      </div>
+      <div>
+        <div class="card" style="padding:18px;margin-bottom:16px">
+          <h3 style="margin-top:0">Où va l'argent ?</h3>
+          <ul style="font-size:.85rem;color:var(--text-dim);padding-left:18px;margin:0">
+            <li>Alimente le fonds qui permet aux sponsors et joueurs statut Villa+ d'annoncer des récompenses plus élevées.</li>
+            <li>Finance les grands événements (défis catégorie Diamant, soirées de lancement).</li>
+            <li>Fait vivre l'infrastructure de la plateforme (hébergement, modération).</li>
+          </ul>
+        </div>
+        <div class="card" style="padding:18px">
+          <h3 style="margin-top:0">🏆 Derniers plus gros donateurs</h3>
+          <div>${top.map(d=>{
+            const du = db.users.find(us=>us.id===d.userId);
+            return `<div class="rank-row"><div class="rank-avatar"><img src="${avatarSrc(du)}"></div><div class="rank-name">${du?du.display:'Anonyme'}<small>${d.date}</small></div><div class="rank-value">${fmtMoney(d.amount)}</div></div>`;
+          }).join('') || `<div class="empty">Sois le premier à donner !</div>`}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="donate-box" style="margin-top:30px">
+      <div class="donate-text">
+        <h2>⭐ Tu préfères soutenir un joueur en particulier ?</h2>
+        <p>Les Gold Stars permettent de soutenir directement une vidéo dans le classement d'un défi, avec une
+        commission reversée au créateur. Un don, lui, profite à toute la communauté.</p>
+      </div>
+      <div class="donate-cta">
+        <a href="gold-stars.html" class="btn btn-gold">⭐ Acheter des Gold Stars</a>
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll('.amount-btn').forEach(b=>{
+    b.addEventListener('click', ()=>{ chosen = +b.dataset.a; render(); });
+  });
+  document.getElementById('customAmount').addEventListener('input', e=>{
+    const v = Math.max(1, Math.round(+e.target.value || 1));
+    document.getElementById('donateBtn').textContent = `💝 Donner ${v} € (démo)`;
+  });
+  document.getElementById('donateBtn').addEventListener('click', ()=>{
+    if(!requireAuth()) return;
+    const amount = Math.max(1, Math.round(+document.getElementById('customAmount').value || chosen));
+    if(!confirm(`Confirmer le don de ${amount} € à The Gamer Rich ? (paiement simulé)`)) return;
+    db.donations.push({ userId:user.id, amount, date:new Date().toISOString().slice(0,10) });
+    saveDB(db);
+    toast(`💝 Merci pour ton don de ${amount} € !`);
+    chosen = amount;
+    render();
+  });
+}
+render();
+</script>
+</body>
+</html>

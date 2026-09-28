@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gold Stars — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section" id="page"></main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+const db = loadDB();
+const user = currentUser(db);
+
+function render(){
+  document.getElementById('page').innerHTML = `
+    <div class="gold-hero">
+      <div class="big-star">⭐</div>
+      <h1 style="margin:8px 0 6px">Achète des Gold Stars</h1>
+      <p style="max-width:560px;margin:0 auto;color:var(--text-dim)">
+        La monnaie de soutien de The Gamer Rich. Chaque Gold Star que tu offres à une participation
+        fait grimper sa vidéo dans le classement du défi (❤️ j'aime + Gold Stars × ${LIKES_PER_GOLD_STAR})
+        et reverse une commission directe aux joueurs créateurs de défis.
+      </p>
+      ${user ? `<div class="pill" style="margin-top:16px;font-size:.85rem">Ton solde actuel : <b style="color:var(--gold)">★ ${user.goldStars}</b></div>` : ''}
+    </div>
+
+    <div class="gold-how">
+      <div class="step"><div class="n">1</div><b>Choisis un pack</b><p style="font-size:.82rem;color:var(--text-faint)">De 10 à 500 Gold Stars, ${GOLD_STAR_PRICE_EUR.toLocaleString('fr-FR',{minimumFractionDigits:2})} € l'unité, sans palier caché.</p></div>
+      <div class="step"><div class="n">2</div><b>Soutiens une vidéo</b><p style="font-size:.82rem;color:var(--text-faint)">Sur la page d'un défi ou en mode Reels, attribue tes étoiles à tes participations préférées.</p></div>
+      <div class="step"><div class="n">3</div><b>Fais grimper les gains</b><p style="font-size:.82rem;color:var(--text-faint)">Le classement bouge en direct, et les créateurs de défis statut Villa et plus touchent une commission sur chaque étoile reçue.</p></div>
+    </div>
+
+    <div class="donate-box" style="margin-top:20px">
+      <div class="donate-text">
+        <h2>⭐ Prêt à soutenir des joueurs ?</h2>
+        <p>L'achat de Gold Stars se fait désormais depuis l'espace « Recharger mon compte », aux côtés des GR (monnaie dédiée à la personnalisation) — deux soldes bien distincts, jamais échangeables entre eux.</p>
+      </div>
+      <div class="donate-cta">
+        <a href="recharge.html?tab=gold" class="btn btn-gold">⭐ Acheter des Gold Stars</a>
+        <span class="donate-note">Mode démonstration — aucun paiement réel.</span>
+      </div>
+    </div>
+
+    <div class="donate-box" style="margin-top:20px">
+      <div class="donate-text">
+        <h2>💝 Envie de soutenir la plateforme plus largement ?</h2>
+        <p>Un don libre alimente directement le fonds de récompenses de The Gamer Rich — plus la cagnotte grossit,
+        plus les défis peuvent proposer de gros gains. Fais un don et participe à des gains toujours plus gros.</p>
+      </div>
+      <div class="donate-cta">
+        <a href="don.html" class="btn btn-primary">💝 Faire un don</a>
+        <span class="donate-note">Paiement simulé — démo uniquement.</span>
+      </div>
+    </div>
+
+    ${user ? `<a href="portefeuille.html" class="btn btn-outline btn-sm" style="margin-top:20px">📜 Voir mon historique dans Mon portefeuille</a>` : ''}
+  `;
+}
+render();
+</script>
+</body>
+</html>

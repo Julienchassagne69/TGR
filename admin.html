@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Administration — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section">
+  <h1>Espace administrateur</h1>
+  <p style="font-size:.8rem">Démonstration — les actions ci-dessous modifient uniquement les données locales de ce navigateur.</p>
+
+  <div class="admin-shell">
+    <div class="admin-side" id="side">
+      <a data-p="overview" class="active">Vue d'ensemble</a>
+      <a data-p="sponsors">Sponsors à valider</a>
+      <a data-p="challenges">Défis</a>
+      <a data-p="submissions">Participations</a>
+      <a data-p="moderation">Modération</a>
+      <a data-p="rewards">Récompenses</a>
+      <a data-p="goldstars">Gold Stars</a>
+      <a data-p="security">Sécurité anti-fraude</a>
+      <a data-p="progression">Paliers visuels</a>
+      <a data-p="economy">Économie GR</a>
+      <a data-p="log">Journal d'audit</a>
+    </div>
+    <div id="panel"></div>
+  </div>
+</main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+const db = loadDB();
+const admin = currentUser(db) ? currentUser(db).display : 'Admin démo';
+let page = 'overview';
+
+document.querySelectorAll('#side a').forEach(a=>{
+  a.addEventListener('click', ()=>{
+    document.querySelectorAll('#side a').forEach(x=>x.classList.remove('active'));
+    a.classList.add('active');
+    page = a.dataset.p;
+    render();
+  });
+});
+
+function logAction(action, detail){
+  db.adminLog.push({ admin, action, detail, date:new Date().toISOString().slice(0,16).replace('T',' ') });
+  saveDB(db);
+}
+
+function render(){
+  const el = document.getElementById('panel');
+
+  if(page==='overview'){
+    el.innerHTML = `
+      <div class="grid grid-4">
+        <div class="stat-card"><div class="num">${db.users.length}</div>Comptes</div>
+        <div class="stat-card"><div class="num">${db.challenges.length}</div>Défis</div>
+        <div class="stat-card"><div class="num">${db.submissions.length}</div>Participations</div>
+        <div class="stat-card"><div class="num">${db.videos.length}</div>Contenus vidéo</div>
+      </div>
+      <div class="grid grid-3" style="margin-top:18px">
+        <div class="stat-card"><div class="num">${fmtMoney(db.challenges.reduce((a,c)=>a+c.reward,0))}</div>Budget récompenses annoncé (sponsors)</div>
+        <div class="stat-card"><div class="num">${fmtMoney((db.sponsorTx||[]).reduce((a,t)=>a+t.billed,0))}</div>Frais de plateforme collectés (7% des défis)</div>
+        <div class="stat-card"><div class="num">${db.submissions.filter(s=>s.status==='pending').length}</div>Participations en attente de validation</div>
+      </div>`;
+  }
+
+  if(page==='sponsors'){
+    const pending = db.challenges.filter(c=>c.approvalStatus==='pending');
+    el.innerHTML = `<h3>Défis sponsors en attente de validation</h3>
+      <p style="font-size:.8rem;color:var(--text-faint)">Le créateur paie le montant qu'il choisit ; la plateforme en prélève 7% (frais), le reste constitue la récompense réellement versée au gagnant.</p>
+      <table class="admin-table">
+      <thead><tr><th>Défi</th><th>Créateur</th><th>Palier</th><th>Ciblage</th><th>Payé</th><th>Frais (7%)</th><th>Récompense nette</th><th></th></tr></thead>
+      <tbody>${pending.map(c=>{
+        const creator = db.users.find(u=>u.id===c.creatorId);
+        const tg = c.targeting.mode==='global' ? 'Mondial' : c.targeting.mode==='countries' ? c.targeting.countries.join(', ') : 'Communauté';
+        return `<tr>
+          <td>${c.title}</td><td>${creator? creator.display : c.creatorId}</td>
+          <td>${TIER_CONFIG[c.tier].label}</td><td>${tg}</td>
+          <td>${fmtMoney(c.amountPaid||(c.reward+c.launchCost))}</td><td>${fmtMoney(c.launchCost)}</td><td>${fmtMoney(c.reward,c.rewardCurrency)}</td>
+          <td><button class="btn btn-sm btn-primary approveSponsorBtn" data-id="${c.id}">Valider</button>
+          <button class="btn btn-sm btn-ghost rejectSponsorBtn" data-id="${c.id}">Rejeter</button></td>
+        </tr>`;
+      }).join('') || `<tr><td colspan="8">Aucun défi en attente.</td></tr>`}</tbody></table>`;
+    document.querySelectorAll('.approveSponsorBtn').forEach(b=> b.addEventListener('click', ()=>{
+      const c = db.challenges.find(x=>x.id===b.dataset.id);
+      c.approvalStatus='approved';
+      c.status = new Date(c.opensAt) > now() ? 'upcoming' : 'active';
+      saveDB(db); logAction('Validation défi sponsor', c.title); render();
+    }));
+    document.querySelectorAll('.rejectSponsorBtn').forEach(b=> b.addEventListener('click', ()=>{
+      const c = db.challenges.find(x=>x.id===b.dataset.id);
+      const reason = prompt('Motif du rejet :') || 'Non conforme';
+      db.challenges = db.challenges.filter(x=>x.id!==c.id);
+      saveDB(db); logAction('Rejet défi sponsor', c.title+' — '+reason); render();
+    }));
+  }
+
+  if(page==='challenges'){
+    el.innerHTML = `<h3>Défis</h3><table class="admin-table">
+      <thead><tr><th>Titre</th><th>Palier</th><th>Statut</th><th>Sponsor</th><th>Récompense</th><th>Gagnant</th><th></th></tr></thead>
+      <tbody>${db.challenges.filter(c=>c.approvalStatus!=='pending').map(c=>{
+        const winner = c.winnerId ? db.users.find(u=>u.id===c.winnerId) : null;
+        return `<tr>
+        <td>${c.title}</td><td>${TIER_CONFIG[c.tier].label}</td><td>${c.status}</td><td>${c.sponsor||'—'}</td><td>${fmtMoney(c.reward,c.rewardCurrency)}</td>
+        <td>${winner? winner.display : '—'}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm closeBtn" data-id="${c.id}">${c.status==='closed'?'Clôturé':'Clôturer'}</button>
+          ${c.status==='closed' && !c.winnerId ? `<button class="btn btn-sm btn-primary confirmWinnerBtn" data-id="${c.id}">Confirmer le gagnant</button>` : ''}
+        </td>
+      </tr>`;
+      }).join('')}</tbody></table>`;
+    document.querySelectorAll('.closeBtn').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const c = db.challenges.find(x=>x.id===b.dataset.id);
+        if(c.status==='closed') return;
+        c.status='closed'; saveDB(db); logAction('Clôture défi', c.title); render();
+      });
+    });
+    document.querySelectorAll('.confirmWinnerBtn').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const c = db.challenges.find(x=>x.id===b.dataset.id);
+        const ranked = db.submissions.filter(s=>s.challengeId===c.id && s.status==='published')
+          .map(s=>({ s, v: db.videos.find(vi=>vi.id===s.videoId) }))
+          .sort((a,b2)=> scoreOf(b2.v,b2.s) - scoreOf(a.v,a.s));
+        if(!ranked.length){ toast('Aucune participation publiée pour ce défi.'); return; }
+        const winnerUser = db.users.find(u=>u.id===ranked[0].s.userId);
+        c.winnerId = winnerUser.id;
+        winnerUser.wins = (winnerUser.wins||0) + 1;
+        winnerUser.earnings = (winnerUser.earnings||0) + c.reward;
+        // Trophées 3/2/1 pour le podium — pas seulement le gagnant, pour que
+        // 2e et 3e place fassent eux aussi progresser leur classement.
+        const TROPHY_POINTS = [3, 2, 1];
+        const podium = [];
+        ranked.slice(0,3).forEach((r,i)=>{
+          const pu = db.users.find(us=>us.id===r.s.userId);
+          if(pu){ pu.trophies = (pu.trophies||0) + TROPHY_POINTS[i]; podium.push(`${pu.display} (+${TROPHY_POINTS[i]}🎖️)`); }
+        });
+        saveDB(db);
+        logAction('Confirmation du gagnant', `${c.title} → ${winnerUser.display} (+${fmtMoney(c.reward,c.rewardCurrency)}) · Podium : ${podium.join(', ')}`);
+        toast(`${winnerUser.display} confirmé gagnant de ${c.title}.`);
+        render();
+      });
+    });
+  }
+
+  if(page==='submissions'){
+    const ROW_CAP = 150;
+    const pendingCount = db.submissions.filter(s=>s.status==='pending').length;
+    // Priorité aux participations en attente (ce qui demande une action) ; le
+    // reste (déjà publié/refusé) est juste un historique consultable, pas
+    // besoin de tout charger d'un coup quand il y en a des centaines.
+    const sorted = db.submissions.slice().sort((a,b)=>{
+      if((a.status==='pending') !== (b.status==='pending')) return a.status==='pending' ? -1 : 1;
+      return new Date(b.submittedAt) - new Date(a.submittedAt);
+    });
+    const shown = sorted.slice(0, ROW_CAP);
+    el.innerHTML = `<h3>Participations à examiner</h3>
+      <p style="font-size:.8rem;color:var(--text-faint)">${pendingCount} en attente sur ${db.submissions.length} au total.${sorted.length>ROW_CAP? ` Affichage limité aux ${ROW_CAP} plus pertinentes (en attente d'abord, puis les plus récentes) — ${sorted.length-ROW_CAP} de plus non affichées.` : ''}</p>
+      <table class="admin-table">
+      <thead><tr><th>Joueur</th><th>Défi</th><th>Statut</th><th>❤️ J'aime</th><th>★</th><th></th></tr></thead>
+      <tbody>${shown.map(s=>{
+        const c = db.challenges.find(ch=>ch.id===s.challengeId);
+        const u = db.users.find(us=>us.id===s.userId);
+        const v = db.videos.find(vi=>vi.id===s.videoId);
+        return `<tr>
+          <td>${u.display}</td><td>${c.title}</td>
+          <td><span class="state-chip state-${s.status==='published'?'published':s.status==='pending'?'pending':'refused'}">${s.status}</span></td>
+          <td>${v.likes}</td><td>${s.goldStars}</td>
+          <td>
+            ${s.status==='pending' ? `<button class="btn btn-sm btn-primary approveBtn" data-id="${s.id}">Valider</button>
+            <button class="btn btn-sm btn-ghost refuseBtn" data-id="${s.id}">Refuser</button>` : '—'}
+          </td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+    document.querySelectorAll('.approveBtn').forEach(b=> b.addEventListener('click', ()=>{
+      const s = db.submissions.find(x=>x.id===b.dataset.id);
+      s.status='published'; saveDB(db); logAction('Validation participation', s.id); render();
+    }));
+    document.querySelectorAll('.refuseBtn').forEach(b=> b.addEventListener('click', ()=>{
+      const reason = prompt('Motif du refus :') || 'Non conforme au règlement';
+      const s = db.submissions.find(x=>x.id===b.dataset.id);
+      s.status='refused'; s.refusalReason=reason; saveDB(db); logAction('Refus participation', s.id+' — '+reason); render();
+    }));
+  }
+
+  if(page==='moderation'){
+    const ROW_CAP = 150;
+    const pending = v=> v.status==='pending' || v.status==='processing';
+    const pendingCount = db.videos.filter(pending).length;
+    const sorted = db.videos.slice().sort((a,b)=>{
+      if(pending(a) !== pending(b)) return pending(a) ? -1 : 1;
+      return new Date(b.publishedAt) - new Date(a.publishedAt);
+    });
+    const shown = sorted.slice(0, ROW_CAP);
+    el.innerHTML = `<h3>Contenus publiés</h3>
+      <p style="font-size:.8rem;color:var(--text-faint)">${pendingCount} en attente sur ${db.videos.length} vidéos au total.${sorted.length>ROW_CAP? ` Affichage limité aux ${ROW_CAP} plus pertinentes (en attente d'abord, puis les plus récentes) — ${sorted.length-ROW_CAP} de plus non affichées.` : ''}</p>
+      <table class="admin-table">
+      <thead><tr><th>Titre</th><th>Auteur</th><th>Catégorie</th><th>Statut</th><th></th></tr></thead>
+      <tbody>${shown.map(v=>{
+        const u = db.users.find(us=>us.id===v.userId);
+        return `<tr><td>${v.title}</td><td>${u.display}</td><td>${v.category}</td>
+          <td><span class="state-chip state-${v.status==='published'?'published':v.status==='pending'?'pending':'refused'}">${v.status}</span></td>
+          <td><button class="btn btn-sm btn-ghost hideBtn" data-id="${v.id}">${v.status==='hidden'?'Masqué':'Masquer'}</button></td></tr>`;
+      }).join('')}</tbody></table>`;
+    document.querySelectorAll('.hideBtn').forEach(b=> b.addEventListener('click', ()=>{
+      const v = db.videos.find(x=>x.id===b.dataset.id);
+      v.status = v.status==='hidden' ? 'published' : 'hidden';
+      saveDB(db); logAction('Modération contenu', v.title+' → '+v.status); render();
+    }));
+  }
+
+  if(page==='rewards'){
+    el.innerHTML = `<h3>Suivi des récompenses</h3><table class="admin-table">
+      <thead><tr><th>Défi</th><th>Montant</th><th>État</th><th></th></tr></thead>
+      <tbody>${db.challenges.map(c=>`<tr>
+        <td>${c.title}</td><td>${fmtMoney(c.reward,c.rewardCurrency)}</td>
+        <td><span class="state-chip state-${c.rewardState==='versee'?'published':c.rewardState==='echouee'?'refused':'pending'}">${c.rewardState||'à vérifier'}</span></td>
+        <td>
+          <select class="rewardSelect" data-id="${c.id}">
+            <option value="a_verifier">À vérifier</option><option value="approuvee">Approuvée</option>
+            <option value="versee">Versée</option><option value="echouee">Échouée</option>
+          </select>
+        </td>
+      </tr>`).join('')}</tbody></table>`;
+    document.querySelectorAll('.rewardSelect').forEach(s=>{
+      const c = db.challenges.find(x=>x.id===s.dataset.id);
+      s.value = c.rewardState || 'a_verifier';
+      s.addEventListener('change', ()=>{
+        c.rewardState = s.value; saveDB(db); logAction('Mise à jour récompense', c.title+' → '+s.value); render();
+      });
+    });
+  }
+
+  if(page==='goldstars'){
+    const ROW_CAP = 150;
+    const tx = db.goldTx.slice().reverse();
+    el.innerHTML = `<h3>Achats et attributions de Gold Stars</h3>
+      <p style="font-size:.8rem;color:var(--text-faint)">${tx.length} transactions au total.${tx.length>ROW_CAP? ` Affichage limité aux ${ROW_CAP} plus récentes.` : ''}</p>
+      <table class="admin-table">
+      <thead><tr><th>Joueur</th><th>Date</th><th>Type</th><th>Détail</th><th>Variation</th></tr></thead>
+      <tbody>${tx.slice(0,ROW_CAP).map(t=>{
+        const u = db.users.find(us=>us.id===t.userId);
+        return `<tr><td>${u?u.display:t.userId}</td><td>${t.date}</td><td>${t.type}</td><td>${t.detail}</td><td>${t.stars>0?'+':''}${t.stars} ★</td></tr>`;
+      }).join('') || `<tr><td colspan="5">Aucune transaction pour l'instant.</td></tr>`}</tbody></table>`;
+  }
+
+  if(page==='security'){
+    const flagged = db.videos.map(v=>{
+      const hoursSince = Math.max(0.5, (now() - new Date(v.publishedAt)) / 3600000);
+      const rate = v.likes / hoursSince;
+      return { v, rate };
+    }).filter(x=>x.rate > 300).sort((a,b)=>b.rate-a.rate);
+
+    el.innerHTML = `
+      <h3>Vérification d'authenticité des vidéos</h3>
+      <div class="card" style="padding:16px;margin-bottom:20px">
+        <p style="font-size:.85rem">Chaque défi génère un <b>code de vérification unique</b> (ex. « CE-7421 ») que le participant doit afficher à l'écran avec son pseudo pendant sa vidéo de 45 secondes maximum. La modération vérifie manuellement leur présence avant validation. En production, on ajouterait :</p>
+        <ul style="font-size:.85rem;color:var(--text-dim);padding-left:18px">
+          <li>Une empreinte perceptuelle (hash vidéo) comparée à la base existante pour détecter les ré-uploads d'un contenu déjà publié ailleurs.</li>
+          <li>Un filigrane pseudo + code intégré automatiquement si la vidéo est capturée depuis l'app.</li>
+          <li>Une file de modération prioritaire pour les comptes récents ou sans historique.</li>
+        </ul>
+      </div>
+
+      <h3>Anti-bot sur les j'aime et les votes</h3>
+      <div class="card" style="padding:16px;margin-bottom:20px">
+        <p style="font-size:.85rem">Le prototype limite déjà chaque compte à un seul j'aime par vidéo (bascule). Un défi financé nécessite des garde-fous supplémentaires en production :</p>
+        <ul style="font-size:.85rem;color:var(--text-dim);padding-left:18px">
+          <li>E-mail vérifié + délai minimum avant qu'un compte puisse faire compter ses j'aime dans un classement.</li>
+          <li>Détection de vitesse anormale (pic de j'aime en quelques minutes) → mise en quarantaine pour revue au lieu de bloquer tout le défi.</li>
+          <li>Empreinte appareil/IP pour repérer les comptes créés en masse ; CAPTCHA déclenché uniquement en cas d'anomalie.</li>
+          <li>Un défi n'est jamais suspendu à cause du spam : seuls les j'aime suspects sont gelés, la compétition continue pour tout le monde.</li>
+        </ul>
+      </div>
+
+      <h3>Alertes automatiques (démo)</h3>
+      <table class="admin-table">
+        <thead><tr><th>Vidéo</th><th>Auteur</th><th>Vitesse de j'aime</th><th></th></tr></thead>
+        <tbody>${flagged.map(({v,rate})=>{
+          const u = db.users.find(us=>us.id===v.userId);
+          return `<tr><td>${v.title}</td><td>${u.display}</td><td>${rate.toFixed(0)} j'aime/h</td>
+            <td><button class="btn btn-sm btn-ghost freezeBtn" data-id="${v.id}">Geler les j'aime suspects</button></td></tr>`;
+        }).join('') || `<tr><td colspan="4">Aucune anomalie détectée pour l'instant.</td></tr>`}</tbody>
+      </table>`;
+    document.querySelectorAll('.freezeBtn').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const v = db.videos.find(x=>x.id===b.dataset.id);
+        v.likes = Math.round(v.likes * 0.2);
+        saveDB(db); logAction('Gel des j\'aime suspects', v.title); render();
+      });
+    });
+  }
+
+  if(page==='progression'){
+    el.innerHTML = `<h3>Paliers visuels (configurables)</h3><table class="admin-table">
+      <thead><tr><th>Niveau</th><th>Icône</th><th>Seuil abonnés</th></tr></thead>
+      <tbody>${PROGRESSION.map(p=>`<tr><td>${p.label}</td><td>${statusIconHtml(p.key,24)}</td><td><input type="number" value="${p.followers}" class="thresholdInput" data-key="${p.key}" style="width:120px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-alt);color:var(--text)"></td></tr>`).join('')}</tbody></table>
+      <button class="btn btn-primary btn-sm" id="saveThresholds" style="margin-top:12px">Enregistrer les seuils</button>
+      <p style="font-size:.78rem;color:var(--text-faint);margin-top:8px">Le diamant reste fixé à 1 000 001 abonnés minimum, le double diamant à 10 000 001.</p>`;
+    document.getElementById('saveThresholds').addEventListener('click', ()=>{
+      document.querySelectorAll('.thresholdInput').forEach(inp=>{
+        const level = PROGRESSION.find(p=>p.key===inp.dataset.key);
+        let val = parseInt(inp.value,10) || 0;
+        if(level.key==='diamant') val = Math.max(1000001, val);
+        if(level.key==='double-diamant') val = Math.max(10000001, val);
+        level.followers = val;
+      });
+      logAction('Mise à jour paliers visuels','—');
+      toast('Seuils mis à jour (session courante).');
+    });
+  }
+
+  if(page==='economy'){
+    ensureEconomyConfig(db);
+    const ledger = db.walletLedger.slice().reverse();
+    const grSold = ledger.filter(l=>l.unit==='GR' && l.type==='recharge' && l.status==='success').reduce((a,l)=>a+l.amount,0);
+    const grGifted = ledger.filter(l=>l.unit==='GR' && l.type==='gift' && l.status==='success').reduce((a,l)=>a+l.amount,0);
+    const grSpent = ledger.filter(l=>l.unit==='GR' && l.type==='purchase' && l.status==='success').reduce((a,l)=>a+Math.abs(l.amount),0);
+    const grAvailable = db.users.reduce((a,u)=> a + (u.accountType!=='brand' ? grBalance(u) : 0), 0);
+    const eurEncaisses = ledger.filter(l=>l.type==='recharge' && l.status==='success').reduce((a,l)=>a+(l.priceCents||0),0);
+
+    el.innerHTML = `
+      <h3>Statistiques économie</h3>
+      <div class="grid grid-4" style="margin-bottom:24px">
+        <div class="stat-card"><div class="num">${eurFromCents(eurEncaisses)}</div>Encaissé (recharges réussies)</div>
+        <div class="stat-card"><div class="num">${fmtNum(grSold)} GR</div>GR vendus</div>
+        <div class="stat-card"><div class="num">${fmtNum(grGifted)} GR</div>GR offerts</div>
+        <div class="stat-card"><div class="num">${fmtNum(grSpent)} GR</div>GR dépensés en boutique</div>
+      </div>
+      <p style="font-size:.78rem;color:var(--text-faint);margin-top:-14px">GR encore disponibles sur l'ensemble des comptes : <b>${fmtNum(grAvailable)} GR</b>. Une recharge et la dépense de ses propres crédits ne comptent qu'une seule fois chacune (jamais comme deux encaissements).</p>
+
+      <h3 style="margin-top:30px">Packs GR</h3>
+      <p style="font-size:.78rem;color:var(--text-faint)">Modifier un prix ici ne change jamais une commande déjà passée — seulement les prochains achats. Colle un <b>Stripe Payment Link</b> (créé en mode TEST dans ton tableau de bord Stripe) pour activer le vrai bouton de paiement sur ce pack — laisse vide pour garder le paiement simulé. Configure la redirection "Après paiement" du lien vers l'URL de cette page avec <code>?stripe_return=1</code> ajouté.</p>
+      <table class="admin-table"><thead><tr><th>GR</th><th>Prix TTC</th><th>Actif</th><th>Lien Stripe (test)</th><th></th></tr></thead>
+        <tbody id="grPacksBody">${db.grPacks.map(p=>`<tr>
+          <td><input type="number" class="grPackGr" data-id="${p.id}" value="${p.gr}" style="width:90px;padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:var(--bg-alt);color:var(--text)"></td>
+          <td><input type="number" class="grPackPrice" data-id="${p.id}" value="${(p.priceCents/100).toFixed(2)}" step="0.01" style="width:90px;padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:var(--bg-alt);color:var(--text)"> €</td>
+          <td><input type="checkbox" class="grPackActive" data-id="${p.id}" ${p.active?'checked':''}></td>
+          <td><input type="url" class="grPackStripe" data-id="${p.id}" value="${p.stripeLink||''}" placeholder="https://buy.stripe.com/test_..." style="width:220px;padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:var(--bg-alt);color:var(--text)"></td>
+          <td><button class="btn btn-sm btn-ghost delGrPack" data-id="${p.id}">Supprimer</button></td>
+        </tr>`).join('')}</tbody></table>
+      <button class="btn btn-outline btn-sm" id="addGrPack" style="margin-top:8px">+ Ajouter un pack GR</button>
+      <button class="btn btn-primary btn-sm" id="saveGrPacks" style="margin-top:8px">Enregistrer les packs GR</button>
+
+      <h3 style="margin-top:30px">Packs Gold Stars</h3>
+      <table class="admin-table"><thead><tr><th>★</th><th>Prix TTC</th><th>Actif</th><th>Lien Stripe (test)</th><th></th></tr></thead>
+        <tbody id="goldPacksBody">${db.goldPacksConfig.map(p=>`<tr>
+          <td><input type="number" class="goldPackStars" data-id="${p.id}" value="${p.stars}" style="width:90px;padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:var(--bg-alt);color:var(--text)"></td>
+          <td><input type="number" class="goldPackPrice" data-id="${p.id}" value="${(p.priceCents/100).toFixed(2)}" step="0.01" style="width:90px;padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:var(--bg-alt);color:var(--text)"> €</td>
+          <td><input type="checkbox" class="goldPackActive" data-id="${p.id}" ${p.active?'checked':''}></td>
+          <td><input type="url" class="goldPackStripe" data-id="${p.id}" value="${p.stripeLink||''}" placeholder="https://buy.stripe.com/test_..." style="width:220px;padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:var(--bg-alt);color:var(--text)"></td>
+          <td><button class="btn btn-sm btn-ghost delGoldPack" data-id="${p.id}">Supprimer</button></td>
+        </tr>`).join('')}</tbody></table>
+      <button class="btn btn-primary btn-sm" id="saveGoldPacks" style="margin-top:8px">Enregistrer les packs Gold Stars</button>
+
+      <h3 style="margin-top:30px">Attribution manuelle de crédits</h3>
+      <div class="card" style="padding:16px;max-width:520px">
+        <div class="field"><label>Joueur (id exact)</label><input id="grantUserId" placeholder="ex: you"></div>
+        <div class="field-row">
+          <div class="field"><label>Unité</label><select id="grantUnit"><option value="GR">GR</option><option value="GOLD">Gold Stars</option></select></div>
+          <div class="field"><label>Quantité</label><input id="grantAmount" type="number" min="1" value="100"></div>
+        </div>
+        <div class="field"><label>Motif (obligatoire)</label><input id="grantReason" placeholder="Ex : geste commercial suite ticket #42"></div>
+        <button class="btn btn-primary btn-sm" id="grantBtn">Attribuer</button>
+      </div>
+
+      <h3 style="margin-top:30px">Dossiers de remboursement en attente (${db.refundCases.filter(c=>c.status==='a_traiter').length})</h3>
+      <table class="admin-table"><thead><tr><th>Utilisateur</th><th>Unité</th><th>Demandé</th><th>Disponible</th><th>Motif</th><th></th></tr></thead>
+        <tbody>${db.refundCases.filter(c=>c.status==='a_traiter').map(c=>{
+          const u = db.users.find(x=>x.id===c.userId);
+          return `<tr><td>${u?u.display:c.userId}</td><td>${c.unit}</td><td>${fmtNum(c.requested)}</td><td>${fmtNum(c.available)}</td><td>${c.reason||'—'}</td>
+            <td><button class="btn btn-sm btn-ghost resolveCaseBtn" data-id="${c.id}">Marquer résolu</button></td></tr>`;
+        }).join('') || `<tr><td colspan="6">Aucun dossier en attente.</td></tr>`}</tbody></table>
+
+      <h3 style="margin-top:30px">Programme d'affiliation</h3>
+      <div class="checkline"><input type="checkbox" id="affEnabled" ${db.affiliateConfig.enabled?'checked':''}><label for="affEnabled">Activer le versement de commissions (5% par défaut) — désactivé tant que non coché, aucun versement réel n'est déclenché ici.</label></div>
+
+      <h3 style="margin-top:30px">Mouvements récents (${ledger.length})</h3>
+      <table class="admin-table"><thead><tr><th>Date</th><th>Utilisateur</th><th>Type</th><th>Unité</th><th>Montant</th><th>Statut</th><th></th></tr></thead>
+        <tbody>${ledger.slice(0,80).map(l=>{
+          const u = db.users.find(x=>x.id===l.userId);
+          const canRefund = l.type==='recharge' && l.status==='success';
+          return `<tr><td>${l.date}</td><td>${u?u.display:l.userId}</td><td>${l.type}</td><td>${l.unit}</td><td>${l.amount>0?'+':''}${fmtNum(l.amount)}</td><td>${l.status}</td>
+            <td>${canRefund? `<button class="btn btn-sm btn-ghost refundBtn" data-id="${l.id}" data-kind="${l.type}">Rembourser</button>`:'—'}</td></tr>`;
+        }).join('') || `<tr><td colspan="7">Aucun mouvement.</td></tr>`}</tbody></table>
+    `;
+
+    document.getElementById('saveGrPacks').addEventListener('click', ()=>{
+      document.querySelectorAll('.grPackGr').forEach(inp=>{
+        const p = db.grPacks.find(x=>x.id===inp.dataset.id); if(p) p.gr = parseInt(inp.value,10)||p.gr;
+      });
+      document.querySelectorAll('.grPackPrice').forEach(inp=>{
+        const p = db.grPacks.find(x=>x.id===inp.dataset.id); if(p) p.priceCents = Math.round(parseFloat(inp.value)*100)||p.priceCents;
+      });
+      document.querySelectorAll('.grPackActive').forEach(inp=>{
+        const p = db.grPacks.find(x=>x.id===inp.dataset.id); if(p) p.active = inp.checked;
+      });
+      document.querySelectorAll('.grPackStripe').forEach(inp=>{
+        const p = db.grPacks.find(x=>x.id===inp.dataset.id); if(p) p.stripeLink = inp.value.trim();
+      });
+      saveDB(db); logAction('Mise à jour packs GR','—'); toast('Packs GR enregistrés — les commandes déjà passées ne sont pas affectées.'); render();
+    });
+    document.getElementById('addGrPack').addEventListener('click', ()=>{
+      db.grPacks.push({ id:'gr-custom-'+Date.now(), gr:100, priceCents:100, active:true, stripeLink:'' });
+      saveDB(db); render();
+    });
+    document.querySelectorAll('.delGrPack').forEach(b=> b.addEventListener('click', ()=>{
+      db.grPacks = db.grPacks.filter(p=>p.id!==b.dataset.id); saveDB(db); logAction('Suppression pack GR', b.dataset.id); render();
+    }));
+    document.getElementById('saveGoldPacks').addEventListener('click', ()=>{
+      document.querySelectorAll('.goldPackStars').forEach(inp=>{
+        const p = db.goldPacksConfig.find(x=>x.id===inp.dataset.id); if(p) p.stars = parseInt(inp.value,10)||p.stars;
+      });
+      document.querySelectorAll('.goldPackPrice').forEach(inp=>{
+        const p = db.goldPacksConfig.find(x=>x.id===inp.dataset.id); if(p) p.priceCents = Math.round(parseFloat(inp.value)*100)||p.priceCents;
+      });
+      document.querySelectorAll('.goldPackActive').forEach(inp=>{
+        const p = db.goldPacksConfig.find(x=>x.id===inp.dataset.id); if(p) p.active = inp.checked;
+      });
+      document.querySelectorAll('.goldPackStripe').forEach(inp=>{
+        const p = db.goldPacksConfig.find(x=>x.id===inp.dataset.id); if(p) p.stripeLink = inp.value.trim();
+      });
+      saveDB(db); logAction('Mise à jour packs Gold Stars','—'); toast('Packs Gold Stars enregistrés.'); render();
+    });
+    document.querySelectorAll('.delGoldPack').forEach(b=> b.addEventListener('click', ()=>{
+      db.goldPacksConfig = db.goldPacksConfig.filter(p=>p.id!==b.dataset.id); saveDB(db); render();
+    }));
+    document.getElementById('grantBtn').addEventListener('click', ()=>{
+      const userId = document.getElementById('grantUserId').value.trim();
+      const unit = document.getElementById('grantUnit').value;
+      const amount = parseInt(document.getElementById('grantAmount').value,10) || 0;
+      const reason = document.getElementById('grantReason').value.trim();
+      const res = adminGrantCredits(db, admin, userId, unit, amount, reason);
+      if(!res.ok){ toast('🔒 '+res.reason); return; }
+      logAction('Attribution manuelle de crédits', `${userId} +${amount} ${unit} — ${reason}`);
+      toast('Crédits attribués.'); render();
+    });
+    document.querySelectorAll('.resolveCaseBtn').forEach(b=> b.addEventListener('click', ()=>{
+      const c = db.refundCases.find(x=>x.id===b.dataset.id); if(c) c.status='resolu';
+      saveDB(db); logAction('Dossier remboursement résolu', b.dataset.id); render();
+    }));
+    document.getElementById('affEnabled').addEventListener('change', (e)=>{
+      db.affiliateConfig.enabled = e.target.checked; saveDB(db);
+      logAction('Affiliation', e.target.checked? 'Activée' : 'Désactivée'); toast('Configuration affiliation mise à jour.');
+    });
+    document.querySelectorAll('.refundBtn').forEach(b=> b.addEventListener('click', ()=>{
+      const reason = prompt('Motif du remboursement :') || 'Non précisé';
+      const res = refundRecharge(db, admin, b.dataset.id, reason);
+      if(!res.ok){ toast('🔒 '+(res.reason||'Remboursement impossible.')); return; }
+      logAction('Remboursement', `recharge ${b.dataset.id}${res.manualCase?' → dossier ouvert (crédits déjà dépensés)':''}`);
+      toast(res.manualCase? 'Crédits déjà dépensés — dossier de traitement ouvert.' : 'Remboursement effectué.');
+      render();
+    }));
+  }
+
+  if(page==='log'){
+    const ROW_CAP = 150;
+    const log = db.adminLog.slice().reverse();
+    el.innerHTML = `<h3>Journal d'audit</h3>
+      <p style="font-size:.8rem;color:var(--text-faint)">${log.length} actions au total.${log.length>ROW_CAP? ` Affichage limité aux ${ROW_CAP} plus récentes.` : ''}</p>
+      <table class="admin-table">
+      <thead><tr><th>Date</th><th>Admin</th><th>Action</th><th>Détail</th></tr></thead>
+      <tbody>${log.slice(0,ROW_CAP).map(l=>`<tr><td>${l.date}</td><td>${l.admin}</td><td>${l.action}</td><td>${l.detail}</td></tr>`).join('') || `<tr><td colspan="4">Aucune action enregistrée.</td></tr>`}</tbody></table>`;
+  }
+}
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paramètres — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section">
+  <h1>Paramètres</h1>
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-t="profile">Profil</div>
+    <div class="tab" data-t="stars">Gold Stars</div>
+    <div class="tab" data-t="notifications">Notifications</div>
+    <div class="tab" data-t="privacy">Confidentialité</div>
+  </div>
+  <div id="content"></div>
+</main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+if(!currentUser()){ location.href='login.html'; }
+const db = loadDB();
+const user = currentUser(db);
+let tab = 'profile';
+
+document.querySelectorAll('#tabs .tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('#tabs .tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    tab = t.dataset.t;
+    render();
+  });
+});
+
+function render(){
+  const el = document.getElementById('content');
+
+  if(tab==='profile' && user.accountType==='brand'){
+    el.innerHTML = `
+      <div class="form-card" style="margin:0">
+        <div class="field"><label>Logo de la marque</label>
+          <div style="margin-bottom:8px">${user.logo? logoHtml(user.logo,64) : '🏢'}</div>
+          <input id="pLogoFile" type="file" accept="image/*">
+        </div>
+        <div class="field"><label>Nom de la marque</label><input id="pDisplay" value="${user.display}"></div>
+        <div class="field"><label>Slogan</label><input id="pSlogan" value="${user.slogan||''}" maxlength="80"></div>
+        <div class="field"><label>Présentation</label><textarea id="pBio" rows="3">${user.bio||''}</textarea></div>
+        <div class="field"><label>Pays</label><input id="pCountry" value="${user.country}"></div>
+        <div class="wardrobe-panel-title" style="margin-top:14px">Visibilité de la marque</div>
+        <div class="field"><label>📸 Instagram</label><input id="pInstagram" placeholder="https://instagram.com/..." value="${(user.socialLinks&&user.socialLinks.instagram)||''}"></div>
+        <div class="field"><label>🌐 Site internet</label><input id="pWebsite" placeholder="https://..." value="${(user.socialLinks&&user.socialLinks.website)||''}"></div>
+        <button class="btn btn-primary btn-block" id="saveProfile">Enregistrer</button>
+      </div>`;
+    let newLogo = null;
+    document.getElementById('pLogoFile').addEventListener('change', async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      newLogo = await fileToResizedDataURL(file, 160);
+      toast('Logo prêt — clique sur Enregistrer.');
+    });
+    document.getElementById('saveProfile').addEventListener('click', ()=>{
+      user.display = document.getElementById('pDisplay').value.trim() || user.display;
+      user.slogan = document.getElementById('pSlogan').value.trim();
+      user.bio = document.getElementById('pBio').value.trim();
+      user.country = document.getElementById('pCountry').value.trim();
+      user.socialLinks = {
+        ...(user.socialLinks||{}),
+        instagram: document.getElementById('pInstagram').value.trim(),
+        website: document.getElementById('pWebsite').value.trim(),
+      };
+      if(newLogo) user.logo = newLogo;
+      saveDB(db);
+      toast('Profil marque mis à jour.');
+      setTimeout(()=> location.href='profil.html?u='+user.id, 500);
+    });
+  } else if(tab==='profile'){
+    const character = getCharacter(user.characterId);
+    el.innerHTML = `
+      <div class="form-card" style="margin:0">
+        <div class="field"><label>Personnage</label>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+            <div class="rank-avatar" style="width:64px;height:64px"><img src="${character.img}" alt="${character.name}"></div>
+            <div>
+              <div style="font-weight:700;font-size:.9rem">${character.name}</div>
+              <a href="personnalisation.html" class="btn btn-outline btn-sm" style="margin-top:6px">🎭 Changer de personnage</a>
+            </div>
+          </div>
+        </div>
+        <div class="field"><label>Bannière de profil</label>
+          <div style="height:80px;border-radius:10px;background-image:${bannerSrc(user)};background-size:cover;background-position:center;margin-bottom:8px" id="bannerPreview"></div>
+          <input id="pBannerFile" type="file" accept="image/*">
+        </div>
+        <div class="field"><label>Pseudo</label><input id="pDisplay" value="${user.display}"></div>
+        <div class="field"><label>Présentation</label><textarea id="pBio" rows="3">${user.bio||''}</textarea></div>
+        <div class="field"><label>Pays</label><input id="pCountry" value="${user.country}"></div>
+        <div class="wardrobe-panel-title" style="margin-top:14px">Direct (Twitch, Kick, YouTube Live…)</div>
+        <div class="field"><label>Lien vers ta chaîne</label><input id="pLive" placeholder="https://twitch.tv/... ou https://kick.com/..." value="${user.liveLink||''}"></div>
+        <div class="checkline" style="margin-bottom:16px">
+          <input type="checkbox" id="pIsLive" ${user.isLive?'checked':''}>
+          <label for="pIsLive">🔴 Je suis en live maintenant — les autres joueurs pourront te rejoindre depuis la page d'accueil.</label>
+        </div>
+        <div class="wardrobe-panel-title" style="margin-top:14px">Réseaux sociaux (facultatif)</div>
+        <div class="field"><label>📸 Instagram</label><input id="pInstagram" placeholder="https://instagram.com/..." value="${(user.socialLinks&&user.socialLinks.instagram)||''}"></div>
+        <div class="field"><label>🎵 TikTok</label><input id="pTiktok" placeholder="https://tiktok.com/@..." value="${(user.socialLinks&&user.socialLinks.tiktok)||''}"></div>
+        <div class="field"><label>💬 Discord</label><input id="pDiscord" placeholder="https://discord.gg/..." value="${(user.socialLinks&&user.socialLinks.discord)||''}"></div>
+        <div class="field"><label>🟣 Twitch</label><input id="pTwitch" placeholder="https://twitch.tv/..." value="${(user.socialLinks&&user.socialLinks.twitch)||''}"></div>
+        <div class="field"><label>▶️ YouTube</label><input id="pYoutube" placeholder="https://youtube.com/@..." value="${(user.socialLinks&&user.socialLinks.youtube)||''}"></div>
+        <button class="btn btn-primary btn-block" id="saveProfile">Enregistrer</button>
+      </div>`;
+    let newBanner = null;
+    document.getElementById('pBannerFile').addEventListener('change', async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      newBanner = await fileToResizedDataURL(file, 600);
+      document.getElementById('bannerPreview').style.backgroundImage = `url('${newBanner}')`;
+      toast('Bannière prête — clique sur Enregistrer.');
+    });
+    document.getElementById('saveProfile').addEventListener('click', ()=>{
+      user.display = document.getElementById('pDisplay').value.trim() || user.display;
+      user.bio = document.getElementById('pBio').value.trim();
+      user.country = document.getElementById('pCountry').value.trim();
+      user.liveLink = document.getElementById('pLive').value.trim();
+      user.isLive = document.getElementById('pIsLive').checked && !!user.liveLink;
+      user.socialLinks = {
+        instagram: document.getElementById('pInstagram').value.trim(),
+        tiktok: document.getElementById('pTiktok').value.trim(),
+        discord: document.getElementById('pDiscord').value.trim(),
+        twitch: document.getElementById('pTwitch').value.trim(),
+        youtube: document.getElementById('pYoutube').value.trim(),
+      };
+      if(newBanner) user.banner = newBanner;
+      saveDB(db);
+      toast('Profil mis à jour.');
+      setTimeout(()=> location.href='profil.html?u='+user.id, 500);
+    });
+  }
+
+  if(tab==='stars'){
+    el.innerHTML = `
+      <div class="grid grid-2" style="max-width:480px;gap:14px;margin-bottom:20px">
+        <div class="stat-card">${grIconHtml(20)} <div class="num" style="margin-top:6px">${fmtNum(grBalance(user))} GR</div>Personnalisation</div>
+        <div class="stat-card"><div class="num">★ ${user.goldStars}</div>Gold Stars — soutien communautaire</div>
+      </div>
+      <p style="font-size:.8rem;color:var(--text-faint)">Deux soldes strictement séparés, jamais échangeables entre eux. Les GR servent uniquement à la boutique de personnalisation ; les Gold Stars uniquement à soutenir des participations dans le classement des défis.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+        <a href="recharge.html" class="btn btn-gold btn-sm">💳 Recharger mon compte</a>
+        <a href="portefeuille.html" class="btn btn-outline btn-sm">📜 Historique complet</a>
+      </div>`;
+  }
+
+  if(tab==='notifications'){
+    el.innerHTML = `<div id="notifList"></div>`;
+    const notifs = db.notifications.filter(n=>n.userId===user.id);
+    document.getElementById('notifList').innerHTML = notifs.map(n=>`
+      <div class="rank-row"><div class="rank-name">${n.text}<small>${n.date}</small></div></div>
+    `).join('') || `<div class="empty">Aucune notification.</div>`;
+  }
+
+  if(tab==='privacy'){
+    el.innerHTML = `
+      <div class="form-card" style="margin:0">
+        <div class="checkline" style="margin-bottom:14px">
+          <input type="checkbox" id="earnVisible" ${user.earningsVisible?'checked':''}>
+          <label for="earnVisible">Afficher publiquement mes gains effectivement versés</label>
+        </div>
+        <p style="font-size:.78rem;color:var(--text-faint)">E-mail, date de naissance, justificatifs et informations de paiement ne sont jamais affichés publiquement.</p>
+        <button class="btn btn-primary btn-block" id="savePriv">Enregistrer</button>
+      </div>`;
+    document.getElementById('savePriv').addEventListener('click', ()=>{
+      user.earningsVisible = document.getElementById('earnVisible').checked;
+      saveDB(db);
+      toast('Préférences enregistrées.');
+    });
+  }
+}
+render();
+</script>
+</body>
+</html>

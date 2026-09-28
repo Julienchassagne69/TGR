@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Défi — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section" id="page"></main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+const db = loadDB();
+const id = qs('id');
+const c = db.challenges.find(x=>x.id===id) || db.challenges[0];
+const user = currentUser(db);
+const tierCfg = TIER_CONFIG[c.tier] || TIER_CONFIG['mains-nues'];
+const eligible = user && canParticipate(db, user, c);
+
+// Classement figé à l'ouverture du mode Reels : l'ordre des slides ne bouge pas
+// pendant le scroll (comme Insta/TikTok), seuls les compteurs et le badge de
+// rang se mettent à jour en direct — sinon une vidéo qui grimpe sauterait sous
+// les yeux de la personne en train de la regarder.
+let ranked = [];
+let lastRankSnapshot = {};
+
+function render(){
+  ranked = db.submissions.filter(s=>s.challengeId===c.id && s.status==='published')
+    .map(s=>({ s, v: db.videos.find(vi=>vi.id===s.videoId) }))
+    .sort((a,b)=> scoreOf(b.v,b.s) - scoreOf(a.v,a.s));
+
+  document.getElementById('page').innerHTML = `
+    <a href="defis.html" style="color:var(--text-faint);font-size:.85rem">← Tous les défis</a>
+    <div class="hero-inner" style="margin-top:14px">
+      <div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <span class="category-badge">${statusIconHtml(tierCfg.key,16)} ${tierCfg.label}</span>
+          <span class="duration-badge">⏱ ${c.duration}</span>
+          ${c.isEvent? `<span class="event-badge">🎆 Événement</span>` : ''}
+          <span class="pill">${c.format==='physical'? '🎥 Événement physique, arbitré, diffusé en direct' : '💻 En ligne'}</span>
+        </div>
+        <h1>${c.title}</h1>
+        <p>${c.description}</p>
+        ${!c.sponsor ? '' : c.creatorType==='brand' ? '' : `<a href="profil.html?u=${c.creatorId}" class="pill">${logoHtml(c.sponsorLogo,18)} Lancé par ${c.sponsor}</a>`}
+        ${c.format==='physical' && c.venue? `<span class="pill" style="margin-left:8px">📍 ${c.venue}</span>` : ''}
+        <div class="hero-meta">
+          <div class="item"><b>${fmtMoney(c.reward, c.rewardCurrency)}</b>Récompense confirmée</div>
+          <div class="item"><b>${c.participants.length}</b>Participants</div>
+          <div class="item"><b>${c.status==='upcoming'? countdownLabel(c.opensAt) : countdownLabel(c.closesAt)}</b>${c.status==='upcoming'?'Avant ouverture':'Temps restant'}</div>
+          <div class="item"><b>${c.duration}</b>Durée du défi</div>
+        </div>
+        <div style="margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          ${!user ? `<a href="login.html" class="btn btn-primary" style="min-width:160px;text-align:center">Se connecter pour participer</a>`
+            : eligible && c.status==='active' ? `<a href="participer.html?id=${c.id}" class="btn btn-primary" style="min-width:160px;text-align:center">Participer</a>`
+            : `<button class="btn btn-outline" style="min-width:160px" disabled title="${eligibilityReason(db,user,c) || (c.status!=='active'? 'Ce défi n’est pas actif actuellement.' : '')}">🔒 ${c.status!=='active' ? (c.status==='upcoming'?'Pas encore ouvert':'Défi terminé') : eligibilityReason(db,user,c)}</button>`}
+          ${ranked.length ? `
+          <button type="button" id="openReelsBtn" class="btn btn-primary" style="min-width:160px">
+            ▶ Scroll et vote
+          </button>` : ''}
+        </div>
+      </div>
+      <div class="hero-media" style="${challengeThumbBg(c.id)}">${thumbBadge(c.image)}</div>
+    </div>
+
+    ${eligible && c.status==='active' ? `
+    <div style="margin-top:20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <a href="participer.html?id=${c.id}" class="btn btn-flash">
+        🎬 Je publie
+      </a>
+    </div>` : ''}
+
+    ${c.sponsor && c.creatorType==='brand' ? (()=>{
+      const brand = db.users.find(us=>us.id===c.creatorId);
+      return `<a href="profil.html?u=${c.creatorId}" class="sponsor-banner" style="text-decoration:none;color:inherit">
+        <div class="sponsor-logo">${c.sponsorLogo ? logoHtml(c.sponsorLogo,56) : '🏢'}</div>
+        <div>
+          <div class="label">Défi sponsorisé par</div>
+          <div class="name">${c.sponsor}</div>
+          ${brand && brand.slogan ? `<div class="slogan">"${brand.slogan}"</div>` : ''}
+        </div>
+      </a>`;
+    })() : ''}
+
+    <div class="grid grid-2" style="margin-top:30px;align-items:start">
+      <div class="card" style="padding:18px">
+        <h3 style="margin-top:0">Instructions</h3>
+        <p style="font-size:.85rem">${c.instructions || 'Aucune instruction spécifique.'}</p>
+        <h3>Règles de validation</h3>
+        <p style="font-size:.85rem">${c.acceptCriteria}</p>
+        <h3>Vérification anti-fraude</h3>
+        <p style="font-size:.85rem">Affiche le code <b>${c.verificationCode}</b> et ton pseudo à l'écran pendant ta vidéo — la modération vérifie sa présence avant validation.</p>
+      </div>
+      <div class="card" style="padding:18px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px">
+          <h3 style="margin:0">Classement du défi</h3>
+        </div>
+        <p style="font-size:.78rem;color:var(--text-faint)">❤️ j'aime + Gold Stars × ${LIKES_PER_GOLD_STAR}${ranked.length? ' · clique une vidéo pour les défiler en plein écran' : ''}</p>
+        <div id="rankList"></div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('rankList').innerHTML = ranked.map(({s,v},i)=>{
+    const u = db.users.find(us=>us.id===s.userId);
+    return `<button type="button" class="rank-row ${i<3?'rank-lead-'+(i+1):''}" data-reels-index="${i}" style="width:100%;text-align:left;border:none;background:var(--bg-card);cursor:pointer;font:inherit;color:inherit">
+      <div class="rank-num">${i+1}</div>
+      <div class="rank-avatar"><img src="${avatarSrc(u)}"></div>
+      <div class="rank-name">${u.display} ${levelBadge(u.level)}<small>${v.title}</small></div>
+      <div class="rank-value" style="font-size:.85rem">❤️ ${fmtNum(v.likes)} · ★${s.goldStars}</div>
+    </button>`;
+  }).join('') || `<div class="empty">Aucune participation publiée pour l'instant.</div>`;
+
+  document.getElementById('rankList').addEventListener('click', e=>{
+    const btn = e.target.closest('[data-reels-index]');
+    if(btn) openReels(+btn.dataset.reelsIndex);
+  });
+  const openBtn = document.getElementById('openReelsBtn');
+  if(openBtn) openBtn.addEventListener('click', ()=>{
+    // On atterrit directement sur sa propre vidéo si on en a une dans ce
+    // défi — plus besoin de scroller parmi les autres pour la retrouver ;
+    // le reste du classement reste accessible en scrollant ou via le Top 5.
+    const myIndex = user ? ranked.findIndex(r=>r.s.userId===user.id) : -1;
+    openReels(myIndex>=0 ? myIndex : 0);
+  });
+}
+render();
+
+// Arrivée directe en mode Reels depuis un lien "Scroll et vote" externe
+// (ex. page d'accueil) — atterrit sur sa propre vidéo si on en a une.
+if(qs('reels')==='1' && ranked.length){
+  const myIndex = user ? ranked.findIndex(r=>r.s.userId===user.id) : -1;
+  openReels(myIndex>=0 ? myIndex : 0);
+}
+
+/* ============ Mode Reels — défilement vertical plein écran ============ */
+
+function liveRankMap(){
+  const sorted = ranked.slice().sort((a,b)=> scoreOf(b.v,b.s) - scoreOf(a.v,a.s));
+  const m = {};
+  sorted.forEach((r,i)=> m[r.s.id] = i+1);
+  return m;
+}
+function initRankSnapshot(){ lastRankSnapshot = liveRankMap(); }
+
+function starState(s){
+  const eligibleSub = c.status==='active' && s.status==='published';
+  const canStarBtn = eligibleSub && user && s.userId!==user.id;
+  const canStar = canStarBtn && user.goldStars>=1;
+  return { canStarBtn, canStar };
+}
+
+function reelsSlideHtml(entry, i){
+  const { s, v } = entry;
+  const su = db.users.find(us=>us.id===s.userId);
+  const liked = user && isLikedByMe(db, v.id, user.id);
+  const { canStarBtn, canStar } = starState(s);
+  const rank = liveRankMap()[s.id];
+  return `
+  <div class="reels-slide" data-sub-id="${s.id}" ${rank<=3?`data-rank="${rank}"`:''}>
+    <div class="reels-slide-bg" style="${thumbBg(v.id)}"></div>
+    ${v.embedUrl && v.embedUrl.startsWith('idb:') ? `<video class="reels-slide-video" playsinline muted loop hidden data-video-key="${v.embedUrl.slice(4)}"></video>` : ''}
+    <div class="reels-slide-fade"></div>
+    <div class="reels-slide-thumb">${v.thumbnail}</div>
+    <div class="reels-topbar">
+      <div class="reels-topbar-left">
+        ${c.sponsor && c.creatorType==='brand' ? `
+        <div class="reels-sponsor-chip">${c.sponsorLogo?logoHtml(c.sponsorLogo,28):'<span class="logo-emoji">🏢</span>'}<span class="name">${c.sponsor}</span></div>
+        ` : ''}
+        <span class="pill reels-title-pill">${c.title}</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <button type="button" class="reels-top5-btn" data-top5-toggle title="Top 5 du défi">🏆</button>
+        <button type="button" class="reels-close" data-reels-close title="Fermer">✕</button>
+      </div>
+    </div>
+    <div class="reels-info">
+      <span class="reels-rank-chip" data-rank-chip>#${rank} au classement</span>
+      <div class="reels-author">
+        <img src="${avatarSrc(su)}">
+        <div><b>${su.display}</b> ${levelBadge(su.level)}</div>
+      </div>
+      <p class="reels-title">${v.title}</p>
+      <p class="reels-desc">${v.description || ''}</p>
+    </div>
+    <div class="reels-actions">
+      <button type="button" class="reels-action ${liked?'liked':''}" data-action="like">
+        <span class="icon">${liked?'❤️':'🤍'}</span>
+        <span class="count" data-like-count>${fmtNum(v.likes)}</span>
+      </button>
+      ${canStarBtn ? `
+      <button type="button" class="reels-action" data-action="star" ${canStar?'':'disabled title="Solde Gold Stars insuffisant"'}>
+        <span class="icon">⭐</span>
+        <span class="count" data-star-count>${s.goldStars}</span>
+      </button>` : ''}
+      <div class="reels-action" style="pointer-events:none">
+        <span class="icon" data-rank-badge style="font-size:1.05rem;font-weight:800">#${rank}</span>
+        <span class="count">rang</span>
+      </div>
+    </div>
+    <div class="reels-toast-overtake" data-overtake></div>
+  </div>`;
+}
+
+function buildReelsOverlay(){
+  let overlay = document.getElementById('reelsOverlay');
+  if(overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.className = 'reels-overlay';
+  overlay.id = 'reelsOverlay';
+  overlay.innerHTML = `
+    <div class="reels-scroller" id="reelsScroller">
+      ${ranked.map((entry,i)=> reelsSlideHtml(entry,i)).join('')}
+    </div>
+    <div class="reels-top5-panel" id="reelsTop5"></div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener('click', e=>{
+    if(e.target.closest('[data-reels-close]')){ closeReels(); return; }
+    if(e.target.closest('[data-top5-toggle]')){ toggleTop5Panel(); return; }
+    const actionBtn = e.target.closest('[data-action]');
+    if(actionBtn && !actionBtn.disabled){
+      const slide = actionBtn.closest('.reels-slide');
+      const entry = ranked.find(r=>r.s.id===slide.dataset.subId);
+      if(actionBtn.dataset.action==='like'){
+        if(!requireAuth()) return;
+        toggleLike(db, entry.v, user.id);
+        afterReelsAction(entry, slide);
+      } else if(actionBtn.dataset.action==='star'){
+        if(!requireAuth()) return;
+        if(spendGoldStarOnSubmission(db, user, entry.s, c)) toast('★ Gold Star attribuée — merci pour ton soutien !');
+        afterReelsAction(entry, slide);
+      }
+    }
+  });
+
+  const observer = new IntersectionObserver(entries=>{
+    entries.forEach(en=>{
+      const slide = en.target;
+      const videoEl = slide.querySelector('.reels-slide-video');
+      if(en.isIntersecting){
+        overlay.dataset.currentSub = slide.dataset.subId;
+        if(videoEl) activateSlideVideo(slide, videoEl);
+      } else if(videoEl && !videoEl.paused){
+        videoEl.pause();
+      }
+    });
+  }, { root: document.getElementById('reelsScroller'), threshold:0.6 });
+  overlay.querySelectorAll('.reels-slide').forEach(s=> observer.observe(s));
+}
+
+// La vraie vidéo (stockée dans IndexedDB, voir js/app.js) n'est chargée que
+// pour le slide actuellement visible — pas question de charger les vidéos de
+// tout le classement d'un coup. Elle remplace le fond statique dès qu'elle
+// est prête ; en cas d'échec, le fond statique reste affiché tel quel.
+const reelsVideoUrls = {};
+function activateSlideVideo(slide, videoEl){
+  if(videoEl.src){ videoEl.play().catch(()=>{}); return; }
+  const key = videoEl.dataset.videoKey;
+  if(reelsVideoUrls[key]){
+    videoEl.src = reelsVideoUrls[key];
+    videoEl.hidden = false;
+    slide.classList.add('has-video');
+    videoEl.play().catch(()=>{});
+    return;
+  }
+  loadVideoBlobURL(key).then(url=>{
+    if(!url) return;
+    reelsVideoUrls[key] = url;
+    videoEl.src = url;
+    videoEl.hidden = false;
+    slide.classList.add('has-video');
+    videoEl.play().catch(()=>{});
+  });
+}
+
+function bump(el){
+  if(!el) return;
+  el.classList.remove('reels-bump');
+  void el.offsetWidth;
+  el.classList.add('reels-bump');
+}
+
+function showOvertakeToast(slide, msg){
+  const el = slide.querySelector('[data-overtake]');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(()=> el.classList.remove('show'), 2600);
+}
+
+function updateAllRankChips(){
+  const m = liveRankMap();
+  document.querySelectorAll('#reelsScroller .reels-slide').forEach(slideEl=>{
+    const r = m[slideEl.dataset.subId];
+    const chip = slideEl.querySelector('[data-rank-chip]');
+    if(chip) chip.textContent = `#${r} au classement`;
+    const badge = slideEl.querySelector('[data-rank-badge]');
+    if(badge) badge.textContent = `#${r}`;
+    if(r<=3) slideEl.dataset.rank = r; else delete slideEl.dataset.rank;
+  });
+}
+
+function afterReelsAction(entry, slide){
+  const newMap = liveRankMap();
+  const oldRank = lastRankSnapshot[entry.s.id];
+  const newRank = newMap[entry.s.id];
+
+  const likeBtn = slide.querySelector('[data-action="like"]');
+  if(likeBtn){
+    const nowLiked = isLikedByMe(db, entry.v.id, user.id);
+    likeBtn.classList.toggle('liked', nowLiked);
+    likeBtn.querySelector('.icon').textContent = nowLiked ? '❤️' : '🤍';
+    likeBtn.querySelector('[data-like-count]').textContent = fmtNum(entry.v.likes);
+    bump(likeBtn.querySelector('.icon'));
+  }
+  const starBtn = slide.querySelector('[data-action="star"]');
+  if(starBtn){
+    starBtn.querySelector('[data-star-count]').textContent = entry.s.goldStars;
+    if(user.goldStars < 1){ starBtn.disabled = true; starBtn.title = 'Solde Gold Stars insuffisant'; }
+    bump(starBtn.querySelector('.icon'));
+  }
+
+  updateAllRankChips();
+  renderTop5Panel();
+
+  if(newRank < oldRank && (newRank<=5 || oldRank<=5)){
+    const displacedId = Object.keys(lastRankSnapshot).find(sid=> lastRankSnapshot[sid]===newRank);
+    const displaced = displacedId ? ranked.find(r=>r.s.id===displacedId) : null;
+    const displacedUser = displaced ? db.users.find(us=>us.id===displaced.s.userId) : null;
+    showOvertakeToast(slide, displacedUser
+      ? `🚀 ${entry.v.title} dépasse ${displacedUser.display} — #${newRank} !`
+      : `🚀 ${entry.v.title} grimpe à la #${newRank} place !`);
+  }
+  lastRankSnapshot = newMap;
+}
+
+function renderTop5Panel(){
+  const panel = document.getElementById('reelsTop5');
+  if(!panel) return;
+  const overlay = document.getElementById('reelsOverlay');
+  const currentSubId = overlay.dataset.currentSub;
+  const top5 = ranked.slice().sort((a,b)=> scoreOf(b.v,b.s) - scoreOf(a.v,a.s)).slice(0,5);
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3>🏆 Top 5 du défi</h3>
+      <button type="button" class="reels-close" data-top5-close>✕</button>
+    </div>
+    ${top5.map((r,i)=>{
+      const su = db.users.find(us=>us.id===r.s.userId);
+      const newR = i+1;
+      const oldR = lastRankSnapshot[r.s.id];
+      let move = '–', cls = '';
+      if(oldR!=null && newR<oldR){ move='▲'; cls='up'; }
+      else if(oldR!=null && newR>oldR){ move='▼'; cls='down'; }
+      return `<div class="reels-top5-row ${r.s.id===currentSubId?'current':''}">
+        <div class="rank-move ${cls}">${move}</div>
+        <div class="rank-num" style="width:auto">${newR}</div>
+        <div class="rank-avatar"><img src="${avatarSrc(su)}"></div>
+        <div class="rank-name" style="flex:1">${su.display}<small>${r.v.title}</small></div>
+        <div class="rank-value" style="font-size:.8rem">❤️${fmtNum(r.v.likes)}·★${r.s.goldStars}</div>
+      </div>`;
+    }).join('')}
+  `;
+  panel.querySelector('[data-top5-close]').addEventListener('click', toggleTop5Panel);
+}
+
+function toggleTop5Panel(){
+  const panel = document.getElementById('reelsTop5');
+  if(!panel.classList.contains('open')) renderTop5Panel();
+  panel.classList.toggle('open');
+}
+
+function openReels(index){
+  buildReelsOverlay();
+  initRankSnapshot();
+  const overlay = document.getElementById('reelsOverlay');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  const scroller = document.getElementById('reelsScroller');
+  const slide = scroller.querySelectorAll('.reels-slide')[index];
+  overlay.dataset.currentSub = slide ? slide.dataset.subId : '';
+  if(slide){
+    scroller.scrollTop = index * scroller.clientHeight;
+    const videoEl = slide.querySelector('.reels-slide-video');
+    if(videoEl) activateSlideVideo(slide, videoEl);
+  }
+}
+
+function closeReels(){
+  const overlay = document.getElementById('reelsOverlay');
+  if(!overlay) return;
+  overlay.querySelectorAll('.reels-slide-video').forEach(v=> v.pause());
+  overlay.classList.remove('open');
+  document.getElementById('reelsTop5')?.classList.remove('open');
+  document.body.style.overflow = '';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lancer un défi — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section" id="page"></main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+if(!currentUser()){ location.href='login.html'; }
+const db = loadDB();
+const user = currentUser(db);
+if(!canLaunchChallenges(user)){
+  toast('🔒 Réservé aux statuts Voiture de luxe et plus.');
+  location.href='profil.html?u='+user.id;
+}
+const isBrand = user.accountType==='brand';
+const maxTierIdx = isBrand ? PROGRESSION.length-1 : levelRank(user.level);
+let tier = 'mains-nues';
+
+function costFor(tierKey){ return TIER_CONFIG[tierKey]; }
+
+function renderForm(){
+  const cfg = costFor(tier);
+  document.getElementById('page').innerHTML = `
+    <h1>🚀 Lancer un défi</h1>
+    <p>${isBrand
+      ? `Tu publies en tant que ${logoHtml(user.logo,22)} <b>${user.display}</b>${user.slogan? ` — <i>"${user.slogan}"</i>`:''} — ton logo sera visible sur le défi.`
+      : `Tu publies en tant que <b>${user.display}</b> ${levelBadge(user.level)} — ton défi sera réservé à ta communauté (tes abonnés).`}</p>
+
+    <div class="form-card" style="margin:20px auto 0;max-width:640px">
+      <div class="field"><label>Titre du défi</label><input id="fTitle" type="text" placeholder="Ex : Cascade Éclair — Front de mer"></div>
+      <div class="field"><label>Description</label><textarea id="fDesc" rows="2"></textarea></div>
+      <div class="field"><label>Instructions pour participer</label><textarea id="fInstr" rows="2"></textarea></div>
+      <div class="field"><label>Règles de validation des vidéos</label><textarea id="fCriteria" rows="2" placeholder="Format vertical 9:16, 45 secondes maximum, etc."></textarea></div>
+      <div class="field-row">
+        <div class="field"><label>Visuel (emoji, démo)</label><input id="fImage" type="text" maxlength="2" placeholder="🏙️"></div>
+        <div class="field"><label>Durée du défi</label>
+          <select id="fDuration">
+            <option value="2h">2 heures</option>
+            <option value="6h">6 heures</option>
+            <option value="1 jour">1 jour</option>
+            <option value="3 jours" selected>3 jours</option>
+            <option value="7 jours">7 jours</option>
+            <option value="48h">48h (grand événement)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Catégorie de défi — détermine qui peut participer (chances égales entre joueurs du même niveau)</label>
+        <select id="fTier"></select>
+        <p style="font-size:.75rem;color:var(--text-faint);margin-top:6px">Plus la catégorie est haute, plus la récompense minimale augmente.</p>
+      </div>
+
+      <div class="field">
+        <label>Déroulement du défi</label>
+        <select id="fFormat">
+          <option value="online">💻 En ligne — chacun soumet sa vidéo depuis chez lui</option>
+          <option value="physical">🎥 Événement physique — salle dédiée, diffusé en direct sur la plateforme, avec arbitre</option>
+        </select>
+      </div>
+      <div class="field" id="venueField" style="display:none">
+        <label>Lieu de l'événement</label>
+        <input id="fVenue" type="text" placeholder="Ex : Studio The Gamer Rich, Paris">
+      </div>
+
+      <div class="field-row">
+        <div class="field"><label>Récompense (€, min. <span id="minRewardLabel"></span>€)</label><input id="fReward" type="number" min="5" step="5"></div>
+        <div class="field"><label>Participations max / joueur</label><input id="fMax" type="number" min="1" value="1"></div>
+      </div>
+
+      ${isBrand ? `
+      <div class="field">
+        <label>Ciblage</label>
+        <select id="fTargetMode">
+          <option value="global">Mondial — tous les pays</option>
+          <option value="countries">Pays sélectionnés</option>
+        </select>
+      </div>
+      <div class="field" id="countryPicker" style="display:none">
+        <label>Pays éligibles</label>
+        <select id="countrySelect" multiple size="6" style="height:auto">
+          ${COUNTRIES.map(c=>`<option value="${c.code}">${c.label}</option>`).join('')}
+        </select>
+      </div>
+      ` : `<div class="field"><span class="pill">🔒 Ciblage automatique : ta communauté uniquement (${fmtNum(user.followers)} abonnés)</span></div>`}
+
+      <div class="field checkline">
+        <input type="checkbox" id="acceptTerms">
+        <label for="acceptTerms">Je confirme que la récompense sera bien versée aux gagnants confirmés et j'accepte les conditions sponsors de la plateforme.</label>
+      </div>
+
+      <p style="font-size:.85rem;color:var(--text-dim);border-top:1px solid var(--line);padding-top:14px;margin-top:6px">
+        Tu payes : <b id="sumPaid" style="color:var(--gold)">—</b> ·
+        Frais de plateforme (7%) : <b id="sumFee" style="color:var(--text-faint)">—</b> ·
+        Le gagnant recevra : <b id="sumNet" style="color:var(--gold)">—</b>
+      </p>
+      <button class="btn btn-primary btn-block" id="publishBtn">Payer et publier</button>
+      <p id="err" style="color:#ff7070;font-size:.8rem;margin-top:10px"></p>
+      <p style="font-size:.75rem;color:var(--text-faint)">Le défi passe en attente de validation admin avant sa mise en ligne (paiement simulé, sécurité et anti-fraude à valider).</p>
+    </div>
+  `;
+
+  document.getElementById('fTier').innerHTML = PROGRESSION.slice(0, maxTierIdx+1).map(p=>{
+    const c2 = TIER_CONFIG[p.key];
+    return `<option value="${p.key}" ${p.key===tier?'selected':''}>${p.icon} ${p.label}${p.key==='mains-nues'?' — ouvert à tous':''} (récompense min. ${fmtMoney(c2.minReward)})</option>`;
+  }).join('');
+
+  document.getElementById('minRewardLabel').textContent = cfg.minReward;
+
+  document.getElementById('fTier').addEventListener('change', (e)=>{
+    tier = e.target.value;
+    renderForm();
+  });
+
+  const targetMode = document.getElementById('fTargetMode');
+  if(targetMode) targetMode.addEventListener('change', ()=>{
+    document.getElementById('countryPicker').style.display = targetMode.value==='countries' ? 'block' : 'none';
+  });
+
+  document.getElementById('fFormat').addEventListener('change', (e)=>{
+    document.getElementById('venueField').style.display = e.target.value==='physical' ? 'block' : 'none';
+  });
+
+  const updateSummary = ()=>{
+    const paid = parseInt(document.getElementById('fReward').value,10) || 0;
+    const fee = Math.round(paid * PLATFORM_FEE_RATE * 100)/100;
+    const net = Math.round((paid - fee) / 5) * 5;
+    document.getElementById('sumPaid').textContent = paid ? fmtMoney(paid) : '—';
+    document.getElementById('sumFee').textContent = paid ? fmtMoney(fee) : '—';
+    document.getElementById('sumNet').textContent = paid ? fmtMoney(net) : '—';
+    document.getElementById('publishBtn').textContent = paid ? `Payer ${fmtMoney(paid)} et publier` : 'Payer et publier';
+  };
+  document.getElementById('fReward').addEventListener('input', updateSummary);
+  updateSummary();
+
+  document.getElementById('publishBtn').addEventListener('click', submitChallenge);
+}
+
+function submitChallenge(){
+  const err = document.getElementById('err');
+  err.textContent = '';
+  const cfg = costFor(tier);
+
+  const title = document.getElementById('fTitle').value.trim();
+  const paid = parseInt(document.getElementById('fReward').value,10) || 0;
+  const maxP = parseInt(document.getElementById('fMax').value,10) || 1;
+
+  if(!title){ err.textContent = 'Le titre est requis.'; return; }
+  if(paid < cfg.minReward){ err.textContent = `Le montant minimum pour un défi ${cfg.label} est de ${cfg.minReward} €.`; return; }
+  if(!document.getElementById('acceptTerms').checked){ err.textContent = 'Tu dois accepter les conditions sponsors.'; return; }
+
+  let targeting = { mode:'community', communityOwnerId:user.id };
+  if(isBrand){
+    const mode = document.getElementById('fTargetMode').value;
+    if(mode==='countries'){
+      const countries = Array.from(document.getElementById('countrySelect').selectedOptions).map(o=>o.value);
+      if(countries.length===0){ err.textContent = 'Sélectionne au moins un pays, ou choisis Mondial.'; return; }
+      targeting = { mode:'countries', countries };
+    } else {
+      targeting = { mode:'global', countries:[] };
+    }
+  }
+
+  const fee = Math.round(paid * PLATFORM_FEE_RATE * 100)/100;
+  const netReward = Math.round((paid - fee) / 5) * 5;
+
+  if(!confirm(`Confirmer le paiement de ${fmtMoney(paid)} pour publier ce défi ? La plateforme prélève 7% (${fmtMoney(fee)}) ; le gagnant recevra ${fmtMoney(netReward)}. (paiement simulé)`)) return;
+
+  const id = 'c' + Date.now();
+  const duration = document.getElementById('fDuration').value;
+  const hoursMap = {'2h':2,'6h':6,'1 jour':24,'3 jours':72,'7 jours':168,'48h':48};
+  const h = hoursMap[duration] || 72;
+  const format = document.getElementById('fFormat').value;
+  const venue = document.getElementById('fVenue').value.trim();
+
+  const challenge = {
+    id, title, sponsor: user.display, sponsorLogo: isBrand ? user.logo : '',
+    creatorId: user.id, creatorType: isBrand ? 'brand' : 'player', tier,
+    image: document.getElementById('fImage').value.trim() || '🎮',
+    reward: netReward, rewardCurrency:'€', rewardConfirmed:true, amountPaid: paid, launchCost: fee,
+    description: document.getElementById('fDesc').value.trim(),
+    instructions: document.getElementById('fInstr').value.trim(),
+    acceptCriteria: document.getElementById('fCriteria').value.trim() || `${RECOMMENDED_VIDEO_FORMAT}, ${MAX_VIDEO_SECONDS} secondes maximum.`,
+    targeting, duration, format, venue: format==='physical' ? venue : '',
+    opensAt: inHours(0), closesAt: inHours(h), resultsAt: inHours(h+24),
+    maxParticipations: maxP, isEvent: duration==='48h',
+    approvalStatus:'pending', verificationCode: 'GR-' + Math.floor(1000+Math.random()*9000), winnerId:null,
+    status:'upcoming', participants:[],
+  };
+  db.challenges.push(challenge);
+  db.sponsorTx = db.sponsorTx || [];
+  db.sponsorTx.push({ id:'tx'+Date.now(), creatorId:user.id, challengeId:id, date:new Date().toISOString().slice(0,10), billed:fee, rewardBudget:netReward });
+  saveDB(db);
+
+  toast('Défi envoyé — en attente de validation admin avant mise en ligne.');
+  setTimeout(()=> location.href='defi.html?id='+id, 900);
+}
+
+renderForm();
+</script>
+</body>
+</html>

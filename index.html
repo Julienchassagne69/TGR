@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Gamer Rich — Plateforme communautaire GTA 6</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container">
+
+  <section id="hero" class="hero section"></section>
+
+  <section class="section" style="padding-top:0">
+    <div class="live-strip"><span class="live-dot">LIVE</span> <span id="liveStripText"></span></div>
+    <div class="grid grid-4" id="statsBar"></div>
+  </section>
+
+  <div id="liveStreamersCard"></div>
+
+  <a href="statuts.html" class="card" style="display:flex;align-items:center;gap:16px;padding:20px;margin:20px 0;text-decoration:none">
+    <div style="font-size:2rem">🏆</div>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:1.05rem">Tous les statuts du jeu</div>
+      <div style="font-size:.82rem;color:var(--text-faint)">Mains nues → Double Diamant — voir les 13 statuts et leurs seuils d'abonnés</div>
+    </div>
+    <div style="color:var(--cyan);font-weight:700">Voir →</div>
+  </a>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>🔥 Défis actifs — choisis le tien</h2>
+      <a href="defis.html" class="see-all">Tous les défis →</a>
+    </div>
+    <p style="margin-top:-10px">Chaque défi a sa propre durée, courte ou XXL lors des grands événements. Poste ta vidéo verticale de 45 secondes max et tente de décrocher la récompense.</p>
+    <div class="grid grid-4" id="activeChallenges"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>🏆 Top 4 — plus grosses récompenses en jeu</h2>
+      <a href="defis.html" class="see-all">Tous les défis →</a>
+    </div>
+    <div class="grid grid-4" id="topChallenges"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>🎬 Vidéos tendances</h2>
+      <a href="videos.html" class="see-all">Toutes les vidéos →</a>
+    </div>
+    <div class="grid grid-4" id="trendingVideos"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>⚡ Fil d'activité en direct</h2>
+    </div>
+    <div id="activityFeed"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>👑 Top 10 joueurs</h2>
+      <a href="classements.html" class="see-all">Classement complet →</a>
+    </div>
+    <div id="top10"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>⚔️ Crews en tête</h2>
+      <a href="communaute.html" class="see-all">Voir la communauté →</a>
+    </div>
+    <div class="grid grid-4" id="topCrews"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>🏢 Nos sponsors</h2>
+      <a href="sponsors.html" class="see-all">Tous les sponsors →</a>
+    </div>
+    <div class="grid grid-4" id="sponsorTeaser"></div>
+  </section>
+
+  <section class="section">
+    <div class="donate-box">
+      <div class="donate-text">
+        <h2>💝 Fais grandir la cagnotte de The Gamer Rich</h2>
+        <p>Chaque don alimente directement les récompenses des défis à venir — plus la communauté donne, plus les gains grandissent. Fais un don et participe à des récompenses toujours plus grosses.</p>
+      </div>
+      <div class="donate-cta">
+        <a href="don.html" class="btn btn-primary">💝 Faire un don</a>
+        <span class="donate-note" id="donateTotalNote"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Prochain défi</h2>
+    </div>
+    <div id="nextChallenge"></div>
+  </section>
+
+
+</main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+const db = loadDB();
+
+function byUser(id){ return db.users.find(u=>u.id===id); }
+function byChallenge(id){ return db.challenges.find(c=>c.id===id); }
+
+const user = currentUser(db);
+
+// HERO — le défi principal est toujours celui où il y a le plus d'argent en jeu
+const activeAll = db.challenges.filter(c=>c.status==='active' && c.approvalStatus!=='pending');
+const upcomingAll = db.challenges.filter(c=>c.status==='upcoming' && c.approvalStatus!=='pending');
+const main = [...activeAll].sort((a,b)=>b.reward-a.reward)[0] || db.challenges[0];
+
+// Bandeau défilant des plus gros gagnants confirmés (défis clôturés avec un vainqueur)
+const biggestWinners = db.challenges
+  .filter(c=>c.status==='closed' && c.winnerId)
+  .map(c=>({ c, winner: byUser(c.winnerId) }))
+  .filter(x=>x.winner)
+  .sort((a,b)=> b.c.reward - a.c.reward)
+  .slice(0,10);
+const tickerItems = biggestWinners.map(({c,winner})=>
+  `<a href="defi.html?id=${c.id}">🏆 <b>${winner.display}</b> a gagné ${fmtMoney(c.reward,c.rewardCurrency)} sur ${c.title}</a>`
+).join('');
+
+document.getElementById('hero').innerHTML = !main ? `
+  <div class="hero-inner"><div><h1>Bienvenue sur The Gamer Rich</h1><p>Aucun défi pour le moment — reviens bientôt !</p></div></div>
+` : `
+  ${tickerItems ? `
+  <div class="winner-ticker">
+    <span class="ticker-label">🔥 Plus gros gains</span>
+    <div class="ticker-viewport"><div class="ticker-track">${tickerItems}${tickerItems}</div></div>
+  </div>` : ''}
+  <div class="hero-inner">
+    <div>
+      <span class="hero-badge">${main.isEvent? '🎆 Grand événement' : '🔥 Défi principal — le plus gros lot en jeu'}</span>
+      <h1>${main.title}</h1>
+      <p>${main.description}</p>
+      ${main.sponsor? `<a href="profil.html?u=${main.creatorId}" class="pill">${logoHtml(main.sponsorLogo,18)} Sponsorisé par ${main.sponsor}</a>` : ''}
+      <div class="hero-meta">
+        <div class="item"><b>${fmtMoney(main.reward, main.rewardCurrency)}</b>Récompense confirmée</div>
+        <div class="item"><b>${main.participants.length}</b>Participants</div>
+        <div class="item"><b>${countdownLabel(main.closesAt)}</b>Temps restant</div>
+        <div class="item"><b>${main.duration}</b>Durée du défi</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <a href="defi.html?id=${main.id}" class="btn btn-primary" style="min-width:160px;text-align:center">Participer</a>
+        ${db.submissions.some(s=>s.challengeId===main.id && s.status==='published') ? `
+        <a href="defi.html?id=${main.id}&reels=1" class="btn btn-primary" style="min-width:160px;text-align:center">▶ Scroll et vote</a>` : ''}
+      </div>
+    </div>
+    <div class="hero-media" style="${challengeThumbBg(main.id)}">${thumbBadge(main.image)}</div>
+  </div>
+`;
+
+// ---- Stats en direct ----
+const publishedVideos = db.videos.filter(v=>v.status==='published');
+const totalGoldStars = db.submissions.reduce((a,s)=>a+(s.goldStars||0),0);
+const rewardInPlay = [...activeAll, ...upcomingAll].reduce((a,c)=>a+c.reward,0);
+document.getElementById('liveStripText').textContent = `${activeAll.length} défis actifs en ce moment · ${db.users.filter(u=>u.accountType!=='brand').length} joueurs sur la plateforme`;
+document.getElementById('statsBar').innerHTML = `
+  <div class="stat-card"><div class="num">${activeAll.length}</div>Défis actifs</div>
+  <div class="stat-card"><div class="num">${fmtMoney(rewardInPlay)}</div>En jeu (actifs + à venir)</div>
+  <div class="stat-card"><div class="num">${fmtNum(publishedVideos.length)}</div>Vidéos publiées</div>
+  <div class="stat-card"><div class="num">★ ${fmtNum(totalGoldStars)}</div>Gold Stars distribuées</div>
+`;
+
+// ---- Streamers en live (déclaré volontairement par le joueur via liveLink) ----
+// Carte carrée façon vignette de stream : fond = le défi qu'iel est en train
+// de tenter (première participation active trouvée), avatar en incrustation
+// façon webcam — pour qu'on sache non seulement qui est en live, mais sur
+// quel défi précisément.
+const liveStreamers = db.users.filter(u=>u.accountType!=='brand' && u.liveLink && u.isLive).sort((a,b)=>b.followers-a.followers).slice(0,6);
+document.getElementById('liveStreamersCard').innerHTML = liveStreamers.length ? `
+  <div class="card" style="padding:20px;margin:20px 0">
+    <div style="font-weight:700;font-size:1.05rem;margin-bottom:14px">🔴 En live en ce moment</div>
+    <div class="grid grid-4">
+      ${liveStreamers.map(u=>{
+        const liveChallenge = db.challenges.find(c=> c.status==='active' && c.approvalStatus!=='pending' && (c.participants||[]).includes(u.id));
+        return `<a href="${u.liveLink}" target="_blank" rel="noopener" class="card live-square-card">
+          <div class="card-thumb" style="aspect-ratio:1/1;${liveChallenge ? challengeThumbBg(liveChallenge.id) : thumbBg(u.id)}">
+            <span class="overlay-badge" style="top:10px;left:10px;bottom:auto;background:rgba(255,47,146,.9)">🔴 LIVE</span>
+            <div class="live-square-avatar"><img src="${avatarSrc(u)}"></div>
+          </div>
+          <div class="card-body" style="padding:10px 12px">
+            <div class="card-title" style="font-size:.85rem;margin-bottom:2px">${u.display}</div>
+            ${liveChallenge ? `<div style="font-size:.7rem;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px">🏁 ${liveChallenge.title}</div>` : ''}
+            <div style="font-size:.72rem;font-weight:700;color:var(--gold)">${fmtNum(u.followers)} abonnés</div>
+          </div>
+        </a>`;
+      }).join('')}
+    </div>
+  </div>` : '';
+
+// ---- Défis actifs ----
+document.getElementById('activeChallenges').innerHTML = activeAll.slice(0,8).map(c=>{
+  const tierCfg = TIER_CONFIG[c.tier] || TIER_CONFIG['mains-nues'];
+  const premium = levelRank(c.tier) >= levelRank('villa');
+  return `<a href="defi.html?id=${c.id}" class="card">
+    <div class="card-thumb" style="${challengeThumbBg(c.id)}">${thumbBadge(c.image)}${sponsorBadgeHtml(c)}<span class="overlay-badge">⏱ ${countdownLabel(c.closesAt)} restant</span></div>
+    <div class="card-body">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <span class="category-badge ${premium?'category-premium':''}">${statusIconHtml(tierCfg.key,16)} ${tierCfg.label}</span>
+        ${c.isEvent? `<span class="event-badge">🎆 Événement</span>` : ''}
+      </div>
+      <div class="card-title">${c.title}</div>
+      <div style="font-size:.78rem;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.sponsor? `${logoHtml(c.sponsorLogo,14)} ${c.sponsor} · ` : ''}${c.description}</div>
+    </div>
+    <div class="card-foot"><span style="color:var(--gold);font-weight:800">${fmtMoney(c.reward,c.rewardCurrency)}</span><span style="color:var(--cyan);font-weight:700">Participer →</span></div>
+  </a>`;
+}).join('') || `<div class="empty">Aucun défi actif pour le moment.</div>`;
+
+// ---- Top 4 plus grosses récompenses (parmi les défis rejoignables : actifs ou à venir) ----
+const medals = ['🥇','🥈','🥉','🏅'];
+const prizeLabels = ['1er prix','2e prix','3e prix','4e prix'];
+const topChallenges = [...activeAll, ...upcomingAll].sort((a,b)=>b.reward-a.reward).slice(0,4);
+document.getElementById('topChallenges').innerHTML = topChallenges.map((c,i)=>{
+  const tierCfg = TIER_CONFIG[c.tier] || TIER_CONFIG['mains-nues'];
+  return `<a href="defi.html?id=${c.id}" class="card top-card">
+    <div class="card-thumb" style="${challengeThumbBg(c.id)}">${thumbBadge(c.image)}<span class="rank-medal">${medals[i]} ${prizeLabels[i]}</span></div>
+    <div class="card-body">
+      <span class="category-badge">${statusIconHtml(tierCfg.key,16)} ${tierCfg.label}</span>
+      <div class="card-title">${c.title}</div>
+      <div style="font-size:.78rem;color:var(--text-faint)">${c.status==='active'?'🔴 En cours':'📅 À venir'}</div>
+    </div>
+    <div class="card-foot"><span style="color:var(--gold);font-weight:800">${fmtMoney(c.reward,c.rewardCurrency)}</span><span style="color:var(--cyan);font-weight:700">Participer →</span></div>
+  </a>`;
+}).join('') || `<div class="empty">Aucun défi pour le moment.</div>`;
+
+// ---- Vidéos tendances (toutes plateformes confondues, pas seulement le défi principal) ----
+const trending = [...publishedVideos].sort((a,b)=>{
+  const sa = db.submissions.find(s=>s.videoId===a.id), sb = db.submissions.find(s=>s.videoId===b.id);
+  return scoreOf(b,sb) - scoreOf(a,sa);
+}).slice(0,8);
+document.getElementById('trendingVideos').innerHTML = trending.map(v=>{
+  const u = byUser(v.userId);
+  const sub = db.submissions.find(s=>s.videoId===v.id);
+  const info = videoChallengeRank(db, v);
+  return `<a href="video.html?id=${v.id}" class="card">
+    <div class="card-thumb myvideo-thumb" style="${thumbBg(v.id)}">
+      ${v.embedUrl && v.embedUrl.startsWith('idb:') ? `<video class="card-video" playsinline muted loop hidden data-video-key="${v.embedUrl.slice(4)}"></video>` : ''}
+      ${thumbBadge(v.thumbnail)}<span class="play-btn">▶</span>${v.durationSec? `<span class="clip-length">0:${String(v.durationSec).padStart(2,'0')}</span>`:''}</div>
+    <div class="card-body">
+      ${info.challenge ? `<span style="font-size:.66rem;font-weight:700;color:var(--gold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;margin-bottom:4px">${info.challenge.title}</span>` : ''}
+      <div class="card-title">${v.title}</div>
+      <div class="card-author"><img src="${avatarSrc(u)}"> @${u.username}</div>
+    </div>
+    <div class="card-foot"><span>❤️ ${fmtCompact(v.likes)}</span><span>${sub? `★ ${sub.goldStars}` : v.category}</span></div>
+  </a>`;
+}).join('') || `<div class="empty">Aucune vidéo publiée pour l'instant.</div>`;
+mountLazyCardVideos(document.getElementById('trendingVideos'));
+
+// ---- Fil d'activité : soumissions / gagnants / statuts débloqués / vidéos / soutiens Gold Star / défis lancés ----
+const events = [];
+db.submissions.forEach(s=>{
+  const u = byUser(s.userId), c = byChallenge(s.challengeId);
+  if(u && c) events.push({ date:s.submittedAt, icon:'🏆', cls:'ev-gold', user:u, href:`video.html?id=${s.videoId}`,
+    text:`vient de soumettre une vidéo pour le défi <span style="color:var(--cyan)">${c.title}</span>` });
+});
+db.goldTx.filter(t=>t.type==='Attribution').forEach(t=>{
+  const u = byUser(t.userId);
+  if(u) events.push({ date:t.date, icon:'❤️', cls:'ev-pink', user:u, href:`profil.html?u=${u.id}`,
+    text:`a soutenu une participation avec une <span style="color:var(--gold)">Gold Star</span>` });
+});
+db.statusUps.forEach(su=>{
+  const u = byUser(su.userId); const lvl = PROGRESSION.find(p=>p.key===su.level);
+  if(u && lvl) events.push({ date:su.date, icon:'⭐', cls:'ev-cyan', user:u, href:`profil.html?u=${u.id}`,
+    text:`a débloqué le statut <span style="color:var(--cyan)">${statusIconHtml(lvl.key,16)} ${lvl.label}</span> ! Félicitations !` });
+});
+publishedVideos.forEach(v=>{
+  const u = byUser(v.userId);
+  events.push({ date:v.publishedAt, icon:'🎥', cls:'ev-purple', user:u, href:`video.html?id=${v.id}`,
+    text:`a publié une nouvelle vidéo : <span style="color:var(--cyan)">${v.title}</span>` });
+});
+db.challenges.forEach(c=>{
+  if(c.approvalStatus==='pending') return;
+  const creator = byUser(c.creatorId);
+  if(creator) events.push({ date:c.opensAt, icon:'🚀', cls:'ev-purple', user:creator, href:`defi.html?id=${c.id}`,
+    text:`a lancé le défi <span style="color:var(--cyan)">${c.title}</span>` });
+  if(c.status==='closed' && c.winnerId){
+    const winner = byUser(c.winnerId);
+    if(winner) events.push({ date:c.resultsAt, icon:'🎁', cls:'ev-orange', user:winner, href:`profil.html?u=${winner.id}`,
+      text:`a remporté la récompense <span style="color:var(--gold)">${fmtMoney(c.reward,c.rewardCurrency)}</span> 🎮 sur ${c.title}` });
+  }
+});
+const feed = events.sort((a,b)=> new Date(b.date) - new Date(a.date)).slice(0,16);
+document.getElementById('activityFeed').innerHTML = feed.map(e=>`
+  <a href="${e.href}" class="rank-row" style="text-decoration:none">
+    <div class="activity-icon ${e.cls}">${e.icon}</div>
+    <img class="activity-avatar" src="${avatarSrc(e.user)}">
+    <div class="rank-name" style="font-weight:500"><b>${e.user.display}</b> ${e.text}</div>
+    <small style="color:var(--text-faint);white-space:nowrap">${timeAgo(e.date)}</small>
+  </a>
+`).join('') || `<div class="empty">Aucune activité pour l'instant.</div>`;
+
+// ---- Top 10 joueurs ----
+const topPlayers = db.users.filter(u=>u.accountType!=='brand').sort((a,b)=>b.wins-a.wins).slice(0,10);
+document.getElementById('top10').innerHTML = topPlayers.map((u,i)=>`
+  <a href="profil.html?u=${u.id}" class="rank-row" style="text-decoration:none">
+    <div class="rank-num">${i+1}</div>
+    <div class="rank-avatar"><img src="${avatarSrc(u)}"></div>
+    <div class="rank-name">${u.display} ${levelBadge(u.level)}
+      <small>${u.country} · ${fmtNum(u.followers)} abonnés ${u.isLive && u.liveLink? ' · <span class=\"live-dot\">LIVE</span>':''}</small>
+    </div>
+    <div class="rank-value">${u.wins} 🏆</div>
+  </a>
+`).join('');
+
+// ---- Crews en tête ----
+const topCrews = [...db.crews].sort((a,b)=>b.wins-a.wins).slice(0,4);
+document.getElementById('topCrews').innerHTML = topCrews.map(cr=>{
+  const members = cr.members.map(id=>byUser(id)).filter(Boolean);
+  return `<a href="communaute.html" class="card" style="padding:18px;text-align:center">
+    <div style="font-size:2rem">${cr.emblem}</div>
+    <div style="font-weight:700;margin:8px 0 4px">${cr.name}</div>
+    <div style="font-size:.78rem;color:var(--text-faint)">${members.length} membres · 🏆 ${cr.wins} victoires</div>
+  </a>`;
+}).join('') || `<div class="empty">Aucun crew pour le moment.</div>`;
+
+// ---- Sponsors en vedette ----
+const sponsorTeaser = db.users.filter(u=>u.accountType==='brand').slice(0,4);
+document.getElementById('sponsorTeaser').innerHTML = sponsorTeaser.map(b=>`
+  <a href="profil.html?u=${b.id}" class="card" style="padding:18px;text-align:center">
+    <div style="font-size:1.8rem">${logoHtml(b.logo,32) || '🏢'}</div>
+    <div style="font-weight:700;margin:8px 0 4px">${b.display}</div>
+    ${b.slogan? `<div style="font-style:italic;color:var(--pink-2);font-size:.75rem">"${b.slogan}"</div>` : ''}
+  </a>
+`).join('') || `<div class="empty">Aucun sponsor pour le moment.</div>`;
+
+// ---- Cagnotte de dons ----
+document.getElementById('donateTotalNote').textContent = `💰 ${fmtMoney(totalDonations(db))} déjà reversés par la communauté`;
+
+// ---- Prochain défi ----
+const upcoming = upcomingAll.sort((a,b)=> new Date(a.opensAt)-new Date(b.opensAt))[0];
+document.getElementById('nextChallenge').innerHTML = upcoming ? `
+  <div class="card" style="display:flex;align-items:center;gap:20px;padding:22px">
+    <div class="thumb-badge" style="position:static;width:56px;height:56px;font-size:1.8rem">${upcoming.image}</div>
+    <div style="flex:1">
+      <h3 style="margin:0 0 4px">${upcoming.title}</h3>
+      <p style="margin:0">Ouverture le ${new Date(upcoming.opensAt).toLocaleDateString('fr-FR')}</p>
+    </div>
+    <div style="text-align:center">
+      <div class="countdown">${countdownLabel(upcoming.opensAt)}</div>
+      <div class="pill">${fmtMoney(upcoming.reward,upcoming.rewardCurrency)} annoncés</div>
+      <div class="duration-badge" style="margin-top:6px">⏱ ${upcoming.duration}</div>
+    </div>
+  </div>
+` : `<div class="empty">Aucun défi programmé pour le moment.</div>`;
+
+</script>
+</body>
+</html>

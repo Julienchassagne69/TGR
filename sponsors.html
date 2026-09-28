@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nos Sponsors — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section">
+  <h1>🏢 Nos Sponsors</h1>
+  <p>Les marques qui financent les défis et leurs récompenses. Le montant distribué correspond aux gains réellement versés aux gagnants confirmés — à distinguer du budget simplement annoncé.</p>
+
+  <div class="grid grid-3" id="summary" style="margin-bottom:30px"></div>
+
+  <div class="tabs" id="sortTabs">
+    <div class="tab active" data-s="distributed">Le plus distribué</div>
+    <div class="tab" data-s="count">Le plus de défis</div>
+    <div class="tab" data-s="active">Défis actifs</div>
+  </div>
+
+  <div class="grid grid-3" id="sponsorGrid"></div>
+</main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+const db = loadDB();
+const brands = db.users.filter(u=>u.accountType==='brand');
+let sortBy = 'distributed';
+
+function statsFor(brand){
+  const challenges = db.challenges.filter(c=>c.creatorId===brand.id && c.approvalStatus!=='pending');
+  const distributed = challenges.filter(c=>c.status==='closed' && c.winnerId).reduce((a,c)=>a+c.reward,0);
+  const announced = challenges.reduce((a,c)=>a+c.reward,0);
+  const billed = (db.sponsorTx||[]).filter(t=>t.creatorId===brand.id).reduce((a,t)=>a+t.billed,0);
+  const active = challenges.filter(c=>c.status==='active').length;
+  const winners = challenges.filter(c=>c.status==='closed' && c.winnerId).length;
+  return { count: challenges.length, distributed, announced, billed, active, winners };
+}
+
+const allStats = brands.map(b=>({ brand:b, stats:statsFor(b) }));
+
+document.getElementById('summary').innerHTML = `
+  <div class="stat-card"><div class="num count-up" data-target="${brands.length}">0</div>Marques partenaires</div>
+  <div class="stat-card"><div class="num count-up" data-target="${allStats.reduce((a,x)=>a+x.stats.distributed,0)}" data-money="1">💰 0 €</div>Distribué aux gagnants</div>
+  <div class="stat-card"><div class="num count-up" data-target="${allStats.reduce((a,x)=>a+x.stats.count,0)}">0</div>Défis sponsorisés au total</div>
+`;
+document.querySelectorAll('#summary .count-up').forEach(el=>{
+  const money = el.dataset.money==='1';
+  animateCountUp(el, +el.dataset.target, n=> money ? '💰 '+fmtMoney(Math.round(n)) : Math.round(n).toLocaleString('fr-FR'));
+});
+
+document.querySelectorAll('#sortTabs .tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('#sortTabs .tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    sortBy = t.dataset.s;
+    render();
+  });
+});
+
+function render(){
+  const sorted = [...allStats].sort((a,b)=>{
+    if(sortBy==='count') return b.stats.count - a.stats.count;
+    if(sortBy==='active') return b.stats.active - a.stats.active;
+    return b.stats.distributed - a.stats.distributed;
+  });
+
+  document.getElementById('sponsorGrid').innerHTML = sorted.map(({brand,stats})=>`
+    <a href="profil.html?u=${brand.id}" class="card" style="padding:20px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <div style="height:52px;min-width:52px;padding:0 8px;border-radius:12px;background:var(--bg-alt);display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0">${logoHtml(brand.logo,36) || '🏢'}</div>
+        <div>
+          <div style="font-weight:700;font-size:1.05rem">${brand.display}</div>
+          ${brand.slogan? `<div style="font-style:italic;color:var(--pink-2);font-size:.8rem">"${brand.slogan}"</div>` : ''}
+          <div style="font-size:.75rem;color:var(--text-faint)">${brand.country}</div>
+        </div>
+      </div>
+      <div class="grid grid-2" style="gap:8px">
+        <div class="stat-card" style="padding:10px"><div class="num count-up" style="font-size:1.3rem" data-target="${stats.count}">0</div>Défis lancés</div>
+        <div class="stat-card" style="padding:10px"><div class="num count-up" style="font-size:1.3rem" data-target="${stats.active}">0</div>Actifs</div>
+        <div class="stat-card" style="padding:10px;grid-column:span 2"><div class="num count-up" style="font-size:1.3rem" data-target="${stats.distributed}" data-money="1">💰 0 €</div>Distribué aux gagnants${stats.announced>stats.distributed? ` <span style="color:var(--text-faint);font-weight:400">/ ${fmtMoney(stats.announced)} annoncés</span>`:''}</div>
+      </div>
+    </a>
+  `).join('') || `<div class="empty">Aucun sponsor pour l'instant.</div>`;
+  document.querySelectorAll('#sponsorGrid .count-up').forEach(el=>{
+    const money = el.dataset.money==='1';
+    animateCountUp(el, +el.dataset.target, n=> money ? '💰 '+fmtMoney(Math.round(n)) : Math.round(n).toLocaleString('fr-FR'));
+  });
+}
+render();
+</script>
+</body>
+</html>

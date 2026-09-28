@@ -1,0 +1,7 @@
+# macOS
+.DS_Store
+
+# Outils locaux / etat de session
+.claude/
+*.log
+*.tmp

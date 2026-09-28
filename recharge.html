@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recharger mon compte — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section" id="page"></main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+if(!currentUser()){ location.href='login.html'; }
+const db = loadDB();
+const user = currentUser(db);
+injectGRSprite();
+
+let tab = (qs('tab')==='gold') ? 'gold' : 'gr';
+let pendingProviderTxId = null;
+const preselectPack = qs('pack');
+
+function render(){
+  document.getElementById('page').innerHTML = `
+    <h1>💳 Recharger mon compte</h1>
+    <div class="demo-payment-note">⚠️ <b>Mode démonstration</b> — les packs sans lien Stripe utilisent un paiement simulé (aucune donnée bancaire demandée). Les packs marqués Stripe passent par un vrai paiement Stripe en <b>mode test</b> (cartes factices uniquement) ; ce site étant 100% statique et sans serveur, le crédit au retour n'est pas vérifié par un webhook signé — à ne jamais utiliser en mode Stripe réel sans backend derrière.</div>
+
+    <div class="grid grid-2" style="max-width:520px;margin-bottom:24px;gap:14px">
+      <div class="balance-pill gr-pill" style="justify-content:center;padding:14px">${grIconHtml(22)} <span>${fmtNum(grBalance(user))} GR</span></div>
+      <div class="balance-pill" style="justify-content:center;padding:14px">★ <span>${fmtNum(user.goldStars)} Gold Stars</span></div>
+    </div>
+
+    <div class="recharge-tabs">
+      <div class="recharge-tab ${tab==='gr'?'active':''}" data-tab="gr">${grIconHtml(18)} Acheter des GR</div>
+      <div class="recharge-tab gold-tab ${tab==='gold'?'active':''}" data-tab="gold">⭐ Acheter des Gold Stars</div>
+    </div>
+
+    <div id="tabContent"></div>
+
+    <p style="font-size:.72rem;color:var(--text-faint);margin-top:26px;max-width:640px">
+      Tarif de référence : 1 € = ${GR_PER_EUR} GR (achat de crédits uniquement — pas une promesse de rachat). Les GR ne sont ni une cryptomonnaie ni un placement : ils ne peuvent être ni transférés à un autre joueur, ni revendus, ni retirés en euros. Un achat de crédits reste soumis aux règles applicables aux achats numériques.
+    </p>
+    <a href="portefeuille.html" class="btn btn-outline btn-sm" style="margin-top:10px">📜 Voir mon historique</a>
+  `;
+  document.querySelectorAll('.recharge-tab').forEach(t=> t.addEventListener('click', ()=>{ tab = t.dataset.tab; render(); }));
+  renderTabContent();
+}
+
+function renderTabContent(){
+  const el = document.getElementById('tabContent');
+  if(tab==='gr'){
+    el.innerHTML = `<div class="pack-grid" id="packGrid"></div>`;
+    document.getElementById('packGrid').innerHTML = db.grPacks.filter(p=>p.active).map(p=>`
+      <div class="pack-tile">
+        <div class="qty">${grIconHtml(26)} ${fmtNum(p.gr)} GR</div>
+        <div class="eur">${eurFromCents(p.priceCents)} TTC</div>
+        <button type="button" class="btn btn-gold btn-sm btn-block" data-buy="gr:${p.id}">Acheter</button>
+      </div>`).join('');
+  } else {
+    el.innerHTML = `<div class="pack-grid" id="packGrid"></div>
+      <p style="font-size:.78rem;color:var(--text-faint);margin-top:14px">Les Gold Stars servent uniquement à soutenir des participations dans le classement des défis — elles ne s'échangent pas contre des GR, et inversement.</p>`;
+    document.getElementById('packGrid').innerHTML = db.goldPacksConfig.filter(p=>p.active).map(p=>`
+      <div class="pack-tile">
+        <div class="qty">★ ${fmtNum(p.stars)} Gold Stars</div>
+        <div class="eur">${eurFromCents(p.priceCents)} TTC</div>
+        <button type="button" class="btn btn-primary btn-sm btn-block" data-buy="gold:${p.id}">Acheter</button>
+      </div>`).join('');
+  }
+  el.querySelectorAll('[data-buy]').forEach(b=> b.addEventListener('click', ()=>{
+    const [kind, packId] = b.dataset.buy.split(':');
+    openRechargeConfirm(kind, packId);
+  }));
+  if(preselectPack && tab==='gr'){
+    const btn = el.querySelector(`[data-buy="gr:${preselectPack}"]`);
+    if(btn) btn.scrollIntoView({block:'center'});
+  }
+}
+
+function closeRechargeModal(){ const m = document.getElementById('rechargeModal'); if(m) m.remove(); }
+
+function openRechargeConfirm(kind, packId){
+  closeRechargeModal();
+  const pack = (kind==='gr'?db.grPacks:db.goldPacksConfig).find(p=>p.id===packId);
+  if(!pack) return;
+  const qtyLabel = kind==='gr' ? `${fmtNum(pack.gr)} GR` : `${fmtNum(pack.stars)} Gold Stars`;
+  const hasStripe = !!pack.stripeLink;
+  const wrap = document.createElement('div');
+  wrap.id = 'rechargeModal';
+  wrap.className = 'modal-bg';
+  wrap.innerHTML = `
+    <div class="modal" id="rechargeModalInner">
+      <h3 style="margin-top:0">Récapitulatif de la commande</h3>
+      <div class="rank-row"><div class="rank-name">${kind==='gr'?grIconHtml(20):'⭐'} ${qtyLabel}<small>Produit numérique — crédité sur ton compte</small></div></div>
+      <div style="display:flex;justify-content:space-between;margin:14px 0;font-size:.95rem;font-weight:700">
+        <span>Total TTC</span><span>${eurFromCents(pack.priceCents)}</span>
+      </div>
+      ${hasStripe ? `
+      <p style="font-size:.72rem;color:var(--text-faint)">Paiement via Stripe (mode test — carte factice, aucun montant réel n'est débité).</p>
+      <button type="button" class="btn btn-gold btn-sm btn-block" id="payStripe">💳 Payer avec Stripe</button>
+      <button type="button" class="btn btn-ghost btn-sm btn-block" style="margin-top:8px" id="simCancel">Annuler</button>
+      ` : `
+      <div class="field"><label>Moyen de paiement</label>
+        <select disabled><option>Carte bancaire (démo — non connectée)</option></select>
+      </div>
+      <p style="font-size:.72rem;color:var(--text-faint)">Ce prototype ne peut pas traiter de paiement réel. Choisis ci-dessous quel résultat simuler — comme le ferait un vrai retour de prestataire.</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+        <button type="button" class="btn btn-gold btn-sm" id="simSuccess">✅ Simuler un paiement réussi</button>
+        <button type="button" class="btn btn-outline btn-sm" id="simFail">❌ Simuler un paiement échoué</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="simCancel">Annuler la commande</button>
+      </div>
+      `}
+    </div>`;
+  document.body.appendChild(wrap);
+  wrap.addEventListener('click', e=>{ if(e.target===wrap) closeRechargeModal(); });
+  document.getElementById('simCancel').addEventListener('click', closeRechargeModal);
+
+  if(hasStripe){
+    document.getElementById('payStripe').addEventListener('click', ()=> goToStripe(kind, packId));
+  } else {
+    document.getElementById('simSuccess').addEventListener('click', ()=> runRecharge(kind, packId, 'success'));
+    document.getElementById('simFail').addEventListener('click', ()=> runRecharge(kind, packId, 'failed'));
+  }
+}
+
+// ============ intégration Stripe (mode TEST) ============
+// On réutilise createRechargeIntent/confirmRecharge (mêmes fonctions que le
+// flux simulé) pour garder un seul et même registre des transactions. La
+// limite assumée de ce mode test : au retour de Stripe, rien ne PROUVE
+// cryptographiquement que le paiement a eu lieu (ça exigerait un webhook
+// signé reçu par un vrai serveur, qu'un site 100% statique ne peut pas
+// avoir) — le crédit se fait ici sur la seule foi du retour de navigation.
+// À remplacer par une vérification serveur avant toute mise en production
+// avec de l'argent réel.
+const STRIPE_PENDING_KEY = 'tgr_stripe_pending';
+function goToStripe(kind, packId){
+  const intent = createRechargeIntent(db, user, kind, packId);
+  if(!intent.ok){ toast('🔒 '+intent.reason); closeRechargeModal(); return; }
+  const pack = (kind==='gr'?db.grPacks:db.goldPacksConfig).find(p=>p.id===packId);
+  sessionStorage.setItem(STRIPE_PENDING_KEY, JSON.stringify({ providerTxId:intent.providerTxId, kind, tab }));
+  location.href = pack.stripeLink;
+}
+function checkStripeReturn(){
+  if(qs('stripe_return')!=='1') return;
+  history.replaceState({}, '', location.pathname);
+  const raw = sessionStorage.getItem(STRIPE_PENDING_KEY);
+  if(!raw) return;
+  sessionStorage.removeItem(STRIPE_PENDING_KEY);
+  let pending; try{ pending = JSON.parse(raw); }catch(e){ return; }
+  const result = confirmRecharge(db, pending.providerTxId);
+  if(result.ok){
+    tab = pending.kind;
+    toast(result.entry.unit==='GR' ? `✅ Paiement Stripe reçu — ${fmtNum(result.entry.amount)} GR crédités !` : `✅ Paiement Stripe reçu — ★ ${fmtNum(result.entry.amount)} Gold Stars crédités !`);
+  } else {
+    toast('⚠️ '+(result.reason||"Impossible de confirmer le paiement."));
+  }
+}
+
+function runRecharge(kind, packId, outcome){
+  const intent = createRechargeIntent(db, user, kind, packId);
+  if(!intent.ok){ toast('🔒 '+intent.reason); closeRechargeModal(); return; }
+  pendingProviderTxId = intent.providerTxId;
+  const inner = document.getElementById('rechargeModalInner');
+  inner.innerHTML = `<h3 style="margin-top:0">⏳ Paiement en cours…</h3><p style="font-size:.85rem;color:var(--text-faint)">En attente de la confirmation du prestataire — le compte n'est jamais crédité avant cette étape, même si cette fenêtre se ferme.</p>`;
+
+  // Simule le délai + la notification asynchrone d'un vrai prestataire : le
+  // crédit n'arrive JAMAIS avant cette confirmation, jamais au simple retour
+  // sur la page.
+  setTimeout(()=>{
+    let result;
+    if(outcome==='success') result = confirmRecharge(db, intent.providerTxId);
+    else result = failRecharge(db, intent.providerTxId, 'Refusé par la banque (démo)');
+
+    if(outcome==='success' && result.ok){
+      const entry = result.entry;
+      const grEl = document.querySelector('.gr-pill');
+      inner.innerHTML = `
+        <h3 style="margin-top:0">✅ Paiement confirmé</h3>
+        <p style="font-size:.9rem">${entry.unit==='GR'? grAmountHtml(entry.amount,18) : `★ ${fmtNum(entry.amount)} Gold Stars`} crédités sur ton compte.</p>
+        <div style="display:flex;justify-content:space-between;font-size:.85rem;margin:14px 0">
+          <span>Nouveau solde</span><span>${entry.unit==='GR'? grAmountHtml(grBalance(user),16) : '★ '+fmtNum(user.goldStars)}</span>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button type="button" class="btn btn-outline btn-sm" style="flex:1" id="closeAfter">Fermer</button>
+          <a href="portefeuille.html" class="btn btn-primary btn-sm" style="flex:1;text-align:center">Voir l'historique</a>
+        </div>`;
+      document.getElementById('closeAfter').addEventListener('click', ()=>{ closeRechargeModal(); render(); });
+    } else {
+      inner.innerHTML = `
+        <h3 style="margin-top:0">❌ Paiement échoué</h3>
+        <p style="font-size:.85rem;color:var(--text-faint)">${(result.entry&&result.entry.failReason)||'Le paiement a été refusé.'} Aucun crédit n'a été ajouté.</p>
+        <button type="button" class="btn btn-primary btn-sm btn-block" id="retryBtn">Réessayer</button>`;
+      document.getElementById('retryBtn').addEventListener('click', ()=>{ closeRechargeModal(); openRechargeConfirm(kind, packId); });
+    }
+  }, 1100);
+}
+
+checkStripeReturn();
+render();
+</script>
+</body>
+</html>

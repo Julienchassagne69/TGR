@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Publier — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section">
+  <div class="form-card" style="max-width:560px">
+    <h2>Publier un contenu</h2>
+    <div class="tabs">
+      <div class="tab active" data-t="video">Vidéo</div>
+      <div class="tab" data-t="tip">Astuce</div>
+    </div>
+
+    <div id="videoForm">
+      <input type="file" id="vFile" accept="video/*" capture="environment" hidden>
+      <div class="composer-frame" id="composerFrame">
+        <video id="previewVideo" playsinline muted loop hidden></video>
+        <div class="composer-placeholder" id="composerPlaceholder">
+          <div style="font-size:2.2rem">🎬</div>
+          <div style="font-weight:700">Ajoute ta vidéo</div>
+          <div style="font-size:.72rem;color:var(--text-faint)">Format vertical, simple à lire sur téléphone</div>
+        </div>
+        <span class="composer-duration-chip" id="durationChip" hidden></span>
+        <button type="button" class="composer-change-btn" id="changeVideoBtn" hidden title="Changer de vidéo">🔄</button>
+        <div class="composer-caption" id="composerCaption" hidden>
+          <textarea id="vCaption" rows="2" maxlength="220" placeholder="Écris une légende…"></textarea>
+        </div>
+      </div>
+      <p id="vErr" style="color:#ff7070;font-size:.8rem;margin-top:10px"></p>
+      <button class="btn btn-primary btn-block" id="vSubmit" disabled>Envoyer pour validation</button>
+    </div>
+
+    <div id="tipForm" style="display:none">
+      <div class="field"><label>Titre</label><input id="tTitle" type="text"></div>
+      <div class="field"><label>Texte</label><textarea id="tText" rows="4"></textarea></div>
+      <div class="field"><label>Catégorie</label><select id="tCat"></select></div>
+      <button class="btn btn-primary btn-block" id="tSubmit">Publier l'astuce</button>
+    </div>
+
+    <p style="font-size:.78rem;color:var(--text-faint);margin-top:14px">Après envoi, ton contenu passe par les états : brouillon → traitement → en attente de validation → publié (ou refusé).</p>
+  </div>
+</main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+if(!currentUser()){ location.href='login.html'; }
+const db = loadDB();
+const user = currentUser(db);
+
+document.getElementById('tCat').innerHTML = CATEGORIES.map(c=>`<option>${c}</option>`).join('');
+
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('videoForm').style.display = t.dataset.t==='video' ? 'block':'none';
+    document.getElementById('tipForm').style.display = t.dataset.t==='tip' ? 'block':'none';
+  });
+});
+
+// ---- Composer façon Insta/Snapchat : on choisit une vidéo, elle se
+// prévisualise aussitôt, la durée est lue automatiquement — plus de lien,
+// plus de miniature à taper à la main, plus de catégorie/langue à choisir
+// (catégorie générique "Découverte", langue reprise du profil). ----
+const fileInput = document.getElementById('vFile');
+const frame = document.getElementById('composerFrame');
+const placeholder = document.getElementById('composerPlaceholder');
+const previewVideo = document.getElementById('previewVideo');
+const durationChip = document.getElementById('durationChip');
+const captionBox = document.getElementById('composerCaption');
+const changeBtn = document.getElementById('changeVideoBtn');
+const vSubmitBtn = document.getElementById('vSubmit');
+const vErr = document.getElementById('vErr');
+let attachedDuration = null;
+
+frame.addEventListener('click', ()=>{ if(!frame.classList.contains('has-video')) fileInput.click(); });
+changeBtn.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  fileInput.value = '';
+  attachedDuration = null;
+  previewVideo.pause();
+  previewVideo.removeAttribute('src');
+  previewVideo.load();
+  previewVideo.hidden = true;
+  placeholder.hidden = false;
+  frame.classList.remove('has-video');
+  durationChip.hidden = true;
+  changeBtn.hidden = true;
+  captionBox.hidden = true;
+  vSubmitBtn.disabled = true;
+});
+
+fileInput.addEventListener('change', ()=>{
+  const file = fileInput.files[0];
+  if(!file) return;
+  vErr.textContent = '';
+  if(!looksLikeVideoFile(file)){ vErr.textContent = 'Sélectionne un fichier vidéo (MP4, MOV…).'; return; }
+
+  previewVideo.src = URL.createObjectURL(file);
+  previewVideo.hidden = false;
+  placeholder.hidden = true;
+  frame.classList.add('has-video');
+  changeBtn.hidden = false;
+  captionBox.hidden = false;
+  durationChip.hidden = false;
+  durationChip.textContent = '…';
+
+  previewVideo.addEventListener('loadedmetadata', ()=>{
+    attachedDuration = Math.max(1, Math.round(previewVideo.duration));
+    durationChip.textContent = `⏱ ${attachedDuration}s`;
+    vSubmitBtn.disabled = false;
+  }, { once:true });
+
+  previewVideo.addEventListener('error', ()=>{
+    durationChip.hidden = true;
+    vSubmitBtn.disabled = true;
+    vErr.textContent = 'Ce fichier vidéo ne peut pas être lu par le navigateur. Essaie un export MP4 (H.264), le format le plus compatible.';
+  }, { once:true });
+
+  previewVideo.play().catch(()=>{});
+});
+
+document.getElementById('vSubmit').addEventListener('click', async ()=>{
+  vErr.textContent = '';
+  const file = fileInput.files[0];
+  if(!file){ vErr.textContent = 'Ajoute une vidéo avant de publier.'; return; }
+  if(!attachedDuration){ vErr.textContent = 'Vidéo en cours de chargement — réessaie dans un instant.'; return; }
+
+  vSubmitBtn.disabled = true;
+  vSubmitBtn.textContent = 'Envoi en cours…';
+
+  const caption = document.getElementById('vCaption').value.trim();
+  const title = caption ? (caption.length>60 ? caption.slice(0,57)+'…' : caption) : 'Nouvelle vidéo';
+  const videoId = 'v'+Date.now();
+  const videoKey = 'idb-'+videoId;
+  const saved = await saveVideoBlob(videoKey, file);
+  db.videos.push({
+    id:videoId, userId:user.id, title, description:caption,
+    category:'Découverte', thumbnail:'🎬',
+    embedUrl: saved ? ('idb:'+videoKey) : '', lang:user.lang||'fr', durationSec:attachedDuration,
+    likes:0, comments:[], challengeId:null,
+    publishedAt:new Date().toISOString().slice(0,10), status:'processing'
+  });
+  saveDB(db);
+  toast('Vidéo envoyée — en attente de validation.');
+  setTimeout(()=> location.href='videos.html', 800);
+});
+
+document.getElementById('tSubmit').addEventListener('click', ()=>{
+  const title = document.getElementById('tTitle').value.trim();
+  const text = document.getElementById('tText').value.trim();
+  if(!title || !text){ toast('Titre et texte requis.'); return; }
+  db.tips.push({ id:'t'+Date.now(), userId:user.id, title, text, category:document.getElementById('tCat').value, createdAt:new Date().toISOString().slice(0,10) });
+  saveDB(db);
+  toast('Astuce publiée.');
+  setTimeout(()=> location.href='videos.html', 800);
+});
+</script>
+</body>
+</html>

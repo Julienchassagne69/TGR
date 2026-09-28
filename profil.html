@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profil — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section" id="page"></main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+const db = loadDB();
+const me = currentUser(db);
+const uid = qs('u') || (me && me.id) || db.users[0].id;
+const u = db.users.find(x=>x.id===uid) || db.users[0];
+const isBrandProfile = u.accountType==='brand';
+const level = getLevelForFollowers(u.followers);
+const next = nextLevel(u.followers);
+const isMe = me && me.id===u.id;
+let tab = 'activity';
+let myVideos = [];
+
+function crewOf(u){ return u.crewId ? db.crews.find(c=>c.id===u.crewId) : null; }
+
+function render(){
+  if(isBrandProfile){ renderBrand(); return; }
+  const crew = crewOf(u);
+  const following = me && isFollowing(db, me.id, u.id);
+  const character = getCharacter(u.characterId);
+  const background = getBackground(u.backgroundId);
+  const bannerCss = u.banner ? `background-image:url('${u.banner}')` : `background-image:${bannerSrc(u)}`;
+
+  document.getElementById('page').innerHTML = `
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
+      <div style="height:190px;${bannerCss};background-size:cover;background-position:center;position:relative">
+        <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(44,28,71,0) 0%, rgba(44,28,71,.55) 62%, rgba(44,28,71,1) 100%)"></div>
+      </div>
+      <div style="padding:16px 24px 24px">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="position:relative;flex-shrink:0">
+            <div class="rank-avatar" style="width:92px;height:92px;border:4px solid var(--bg-card);border-radius:50%;background:var(--bg-card)"><img src="${avatarSrc(u)}"></div>
+            ${u.isLive && u.liveLink ? `<span title="En live" style="position:absolute;bottom:4px;right:4px;width:18px;height:18px;border-radius:50%;background:#ff4d4d;border:3px solid var(--bg-card);animation:pulse 1.4s infinite"></span>` : ''}
+          </div>
+          <div style="flex:1;min-width:200px">
+            <h1 style="font-size:1.7rem;margin-bottom:4px">${u.display} ${levelBadge(u.level)} ${u.isLive && u.liveLink? `<span class="live-dot">LIVE</span>` : ''}</h1>
+            <div style="color:var(--text-faint);font-size:.85rem">${u.country} · ${u.bio||''}</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${isMe ? `
+              <a href="parametres.html" class="btn btn-outline btn-sm">Modifier le profil</a>
+              <a href="personnalisation.html" class="btn btn-outline btn-sm">🎭 Choisir mon personnage</a>
+              ${canLaunchChallenges(u) ? `<a href="lancer-defi.html" class="btn btn-primary btn-sm">🚀 Lancer un défi</a>` : ''}
+              <button type="button" id="toggleLiveBtn" class="btn ${u.isLive?'btn-primary':'btn-outline'} btn-sm">${u.isLive? '🔴 En live — arrêter' : '🔴 Je passe en live'}</button>
+            ` : `<button class="btn ${following?'btn-primary':'btn-outline'} btn-sm" id="followBtn">${following?'Suivi ✓':'Suivre'}</button>`}
+            <a href="#participations" class="btn btn-ghost btn-sm">Voir les participations</a>
+          </div>
+        </div>
+        <div class="grid grid-4" style="margin-top:24px">
+          <div class="stat-card"><div class="num">${fmtNum(u.followers)}</div>Abonnés<div style="font-size:.7rem;color:var(--text-faint);margin-top:2px">${fmtNum((db.follows[u.id]||[]).length)} abonnements</div></div>
+          <div class="stat-card"><div class="num">${u.participations}</div>Participations</div>
+          <div class="stat-card"><div class="num">🏆 ${u.wins}</div>Défis gagnés</div>
+          <div class="stat-card"><div class="num">${u.earningsVisible ? '💰 '+fmtMoney(u.earnings,'€') : '🔒'}</div>Gains totaux gagnés</div>
+        </div>
+        ${next ? `
+          <div style="margin-top:18px">
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text-faint);margin-bottom:6px">
+              <span>${statusIconHtml(level.key,16)} ${level.label}</span><span>${statusIconHtml(next.key,16)} ${next.label} à ${fmtNum(next.followers)} abonnés${next.key==='voiture-luxe'?' — débloque le lancement de défis rémunérés':''}</span>
+            </div>
+            <div class="progress-track"><div class="progress-fill" style="width:${Math.min(100, u.followers/next.followers*100)}%"></div></div>
+          </div>` : `<div style="margin-top:18px"><span class="pill">💎 Statut maximum atteint</span></div>`}
+        ${crew ? `<a href="communaute.html" class="pill" style="margin-top:14px;display:inline-block">${crew.emblem} Crew : ${crew.name}</a>` : ''}
+        ${u.liveLink ? `<a href="${u.liveLink}" target="_blank" class="pill" style="margin-top:14px;display:inline-block;margin-left:8px">${u.isLive? '🔴 En live — rejoindre' : '📺 Chaîne'}</a>` : ''}
+        ${(()=>{
+          const sl = u.socialLinks || {};
+          const items = [
+            sl.instagram && { icon:'📸', href:sl.instagram, label:'Instagram' },
+            sl.tiktok && { icon:'🎵', href:sl.tiktok, label:'TikTok' },
+            sl.discord && { icon:'💬', href:sl.discord, label:'Discord' },
+            sl.twitch && { icon:'🟣', href:sl.twitch, label:'Twitch' },
+            sl.youtube && { icon:'▶️', href:sl.youtube, label:'YouTube' },
+          ].filter(Boolean);
+          if(!items.length) return '';
+          return `<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+            ${items.map(it=>`<a href="${it.href}" target="_blank" rel="noopener" class="pill" title="${it.label}">${it.icon} ${it.label}</a>`).join('')}
+          </div>`;
+        })()}
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-bottom:20px;align-items:start">
+      <div class="char-showcase" style="${background ? `background-image:url('${background.img}');background-size:cover;background-position:center` : ''}">
+        <img src="${character.img}" alt="${character.name}">
+        <div class="char-showcase-name"><b>${character.name}</b><span>${character.tagline||''}</span></div>
+      </div>
+      <div class="card" style="padding:16px;aspect-ratio:3/4;display:flex;flex-direction:column" id="profileGrowth"></div>
+    </div>
+
+    <div class="tabs" id="profTabs">
+      <div class="tab ${tab==='presentation'?'active':''}" data-t="presentation">Présentation</div>
+      <div class="tab ${tab==='activity'?'active':''}" data-t="activity">Activité</div>
+      <div class="tab ${tab==='videos'?'active':''}" data-t="videos">Vidéos</div>
+      <div class="tab ${tab==='palmares'?'active':''}" data-t="palmares">Palmarès</div>
+    </div>
+    <div id="tabContent"></div>
+  `;
+
+  document.getElementById('profileGrowth').innerHTML = renderGrowthCharts(db, u);
+
+  document.querySelectorAll('#profTabs .tab').forEach(t=>{
+    t.addEventListener('click', ()=>{ tab=t.dataset.t; render(); });
+  });
+  const fb = document.getElementById('followBtn');
+  if(fb) fb.addEventListener('click', ()=>{
+    if(!requireAuth()) return;
+    toggleFollow(db, me, u);
+    toast(isFollowing(db, me.id, u.id) ? 'Tu suis maintenant '+u.display : 'Tu ne suis plus '+u.display);
+    render();
+  });
+  const liveBtn = document.getElementById('toggleLiveBtn');
+  if(liveBtn) liveBtn.addEventListener('click', ()=>{
+    if(!u.liveLink){
+      toast('Ajoute d\'abord le lien de ta chaîne dans Paramètres.');
+      setTimeout(()=> location.href='parametres.html', 900);
+      return;
+    }
+    u.isLive = !u.isLive;
+    saveDB(db);
+    toast(u.isLive ? '🔴 Tu es en live — visible sur la page d\'accueil.' : 'Live terminé.');
+    render();
+  });
+
+  renderTab();
+}
+
+function renderBrand(){
+  const sponsored = db.challenges.filter(c=>c.creatorId===u.id && c.approvalStatus!=='pending');
+  const totalReward = sponsored.reduce((a,c)=>a+c.reward,0);
+  document.getElementById('page').innerHTML = `
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
+      <div style="height:190px;background-image:${bannerSrc(u)};background-size:cover;background-position:center;position:relative">
+        <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(44,28,71,0) 0%, rgba(44,28,71,.55) 62%, rgba(44,28,71,1) 100%)"></div>
+      </div>
+      <div style="padding:16px 24px 24px">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div class="rank-avatar" style="height:92px;min-width:92px;max-width:220px;padding:0 14px;border:4px solid var(--bg-card);border-radius:20px;overflow:visible;display:flex;align-items:center;justify-content:center;font-size:2.4rem;background:var(--bg-alt);flex-shrink:0">${u.logo? logoHtml(u.logo,60) : '🏢'}</div>
+          <div style="flex:1;min-width:200px">
+            <h1 style="font-size:1.7rem;margin-bottom:4px">${u.display} <span class="status-badge">🏢 Compte Marque</span></h1>
+            ${u.slogan? `<div style="font-style:italic;color:var(--pink-2);font-size:.9rem;margin:2px 0">"${u.slogan}"</div>` : ''}
+            <div style="color:var(--text-faint);font-size:.85rem">${u.country}</div>
+          </div>
+          ${isMe ? `<a href="parametres.html" class="btn btn-outline btn-sm">Modifier le profil</a>` : ''}
+          ${isMe && canLaunchChallenges(u) ? `<a href="lancer-defi.html" class="btn btn-primary btn-sm">🚀 Lancer un défi</a>` : ''}
+        </div>
+        ${(()=>{
+          const sl = u.socialLinks || {};
+          const items = [
+            sl.instagram && { icon:'📸', href:sl.instagram, label:'Instagram' },
+            sl.website && { icon:'🌐', href:sl.website, label:'Site internet' },
+          ].filter(Boolean);
+          if(!items.length) return '';
+          return `<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+            ${items.map(it=>`<a href="${it.href}" target="_blank" rel="noopener" class="pill" title="${it.label}">${it.icon} ${it.label}</a>`).join('')}
+          </div>`;
+        })()}
+        <div class="grid grid-3" style="margin-top:24px">
+          <div class="stat-card"><div class="num">${sponsored.length}</div>Défis sponsorisés</div>
+          <div class="stat-card"><div class="num">💰 ${fmtMoney(totalReward)}</div>Total récompenses distribuées</div>
+          <div class="stat-card"><div class="num">${sponsored.filter(c=>c.status==='active').length}</div>Défis actifs</div>
+        </div>
+      </div>
+    </div>
+    <h2>Présentation</h2>
+    <div class="card" style="padding:20px;margin-bottom:20px">
+      <p style="font-size:.9rem;margin:0">${u.bio || 'Aucune présentation pour le moment.'}</p>
+    </div>
+    <h2>Défis sponsorisés</h2>
+    <div class="grid grid-3">${sponsored.map(c=>`
+      <a href="defi.html?id=${c.id}" class="card">
+        <div class="card-thumb" style="${challengeThumbBg(c.id)}">${thumbBadge(c.image)}</div>
+        <div class="card-body"><span class="card-tag">${TIER_CONFIG[c.tier].label}</span><div class="card-title">${c.title}</div></div>
+        <div class="card-foot"><span>${fmtMoney(c.reward,c.rewardCurrency)}</span><span>${c.status}</span></div>
+      </a>`).join('') || `<div class="empty">Aucun défi sponsorisé pour l'instant.</div>`}
+    </div>
+  `;
+}
+
+function renderTab(){
+  const el = document.getElementById('tabContent');
+  if(tab==='activity'){
+    const items = [
+      ...db.videos.filter(v=>v.userId===u.id).map(v=>({ type:'video', date:v.publishedAt, data:v })),
+      ...db.tips.filter(t=>t.userId===u.id).map(t=>({ type:'tip', date:t.createdAt, data:t })),
+      ...db.submissions.filter(s=>s.userId===u.id).map(s=>({ type:'participation', date:s.submittedAt, data:s })),
+    ].sort((a,b)=> new Date(b.date)-new Date(a.date));
+
+    el.innerHTML = items.map(item=>{
+      if(item.type==='video'){
+        const v = item.data;
+        return `<a href="video.html?id=${v.id}" class="rank-row" style="align-items:flex-start;text-decoration:none">
+          <div class="badge-icon">🎬</div>
+          <div class="rank-name">${u.display} a publié une vidéo<small>${v.title} · ${v.category} · ${new Date(v.publishedAt).toLocaleDateString('fr-FR')}</small></div>
+          <div class="rank-value" style="font-size:.85rem">❤️ ${fmtNum(v.likes)}</div>
+        </a>`;
+      }
+      if(item.type==='tip'){
+        const t = item.data;
+        return `<div class="rank-row" style="align-items:flex-start">
+          <div class="badge-icon">💡</div>
+          <div class="rank-name">${u.display} a partagé une astuce<small>${t.title} · ${new Date(t.createdAt).toLocaleDateString('fr-FR')}</small></div>
+        </div>`;
+      }
+      const s = item.data;
+      const c = db.challenges.find(ch=>ch.id===s.challengeId);
+      return `<a href="defi.html?id=${c.id}" class="rank-row" style="align-items:flex-start;text-decoration:none">
+        <div class="badge-icon">🏁</div>
+        <div class="rank-name">${u.display} a participé à un défi<small>${c.title} · ${new Date(s.submittedAt).toLocaleDateString('fr-FR')}</small></div>
+        <span class="state-chip state-${s.status==='published'?'published':s.status==='pending'?'pending':'refused'}">${s.status}</span>
+      </a>`;
+    }).join('') || `<div class="empty">Aucune activité pour l'instant.</div>`;
+  }
+  if(tab==='presentation'){
+    el.innerHTML = `<div class="card" style="padding:20px"><p>${u.bio||'Aucune présentation.'}</p>
+      <h3>Badges</h3>
+      <div style="display:flex;gap:10px">${(u.badges&&u.badges.length? u.badges : ['🏆','⭐','🎬']).map(b=>`<div class="badge-icon">${b}</div>`).join('')}</div>
+    </div>`;
+  }
+  if(tab==='videos'){
+    myVideos = db.videos.filter(v=>v.userId===u.id).sort((a,b)=> new Date(b.publishedAt) - new Date(a.publishedAt));
+    el.innerHTML = (myVideos.length ? `<button type="button" class="btn btn-primary btn-sm" id="openMyReelsBtn" style="margin-bottom:16px;display:inline-flex;align-items:center;gap:6px">▶ Voir en scroll</button>` : '') +
+      `<div class="grid grid-4" id="participations">` + (myVideos.map((v,i)=>{
+        const info = videoChallengeRank(db, v);
+        return `<a href="#" class="card myVideoCard" data-index="${i}"><div class="card-thumb myvideo-thumb" style="${thumbBg(v.id)}">
+        ${v.embedUrl && v.embedUrl.startsWith('idb:') ? `<video class="card-video" playsinline muted loop hidden data-video-key="${v.embedUrl.slice(4)}"></video>` : ''}
+        ${thumbBadge(v.thumbnail)}</div>
+        <div class="card-body">
+          ${info.challenge ? `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px">
+              <span style="font-size:.66rem;font-weight:700;color:var(--gold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${info.challenge.title}</span>
+              ${info.rankLabel? `<span style="font-size:.7rem;font-weight:800;color:var(--gold);flex-shrink:0">${info.rankLabel}</span>` : ''}
+            </div>` : `<span class="card-tag">${v.category}</span>`}
+          <div class="card-title">${v.title}</div>
+        </div>
+      </a>`;
+      }).join('') || `<div class="empty">Aucune vidéo publiée.</div>`) + `</div>`;
+    mountLazyCardVideos(el);
+    const openBtn = document.getElementById('openMyReelsBtn');
+    if(openBtn) openBtn.addEventListener('click', ()=> openMyReels(0));
+    document.querySelectorAll('.myVideoCard').forEach(cardEl=>{
+      cardEl.addEventListener('click', e=>{ e.preventDefault(); openMyReels(+cardEl.dataset.index); });
+    });
+  }
+  if(tab==='palmares'){
+    const subs = db.submissions.filter(s=>s.userId===u.id);
+    el.innerHTML = subs.map(s=>{
+      const c = db.challenges.find(ch=>ch.id===s.challengeId);
+      return `<div class="rank-row"><div class="rank-name">${c.title}<small>${new Date(s.submittedAt).toLocaleDateString('fr-FR')}</small></div>
+        <span class="state-chip state-${s.status==='published'?'published':s.status==='pending'?'pending':'refused'}">${s.status}</span></div>`;
+    }).join('') || `<div class="empty">Aucune participation.</div>`;
+  }
+}
+
+/* ============ Format scroll — uniquement mes vidéos (façon Reels) ============
+   Réutilise les classes .reels-* déjà construites pour le mode Reels des
+   défis, en plus léger (pas de classement/Gold Star ici, juste ses propres
+   vidéos, j'aime et vraie lecture vidéo). */
+function myReelSlideHtml(v, i){
+  const liked = me && isLikedByMe(db, v.id, me.id);
+  const info = videoChallengeRank(db, v);
+  const rankNum = info.rankLabel ? parseInt(info.rankLabel.slice(1),10) : null;
+  return `
+  <div class="reels-slide" data-vid="${v.id}" ${rankNum && rankNum<=3 ? `data-rank="${rankNum}"` : ''}>
+    <div class="reels-slide-bg" style="${thumbBg(v.id)}"></div>
+    ${v.embedUrl && v.embedUrl.startsWith('idb:') ? `<video class="reels-slide-video" playsinline muted loop hidden data-video-key="${v.embedUrl.slice(4)}"></video>` : ''}
+    <div class="reels-slide-fade"></div>
+    <div class="reels-slide-thumb">${v.thumbnail}</div>
+    <div class="reels-topbar">
+      <span class="pill reels-title-pill">${v.title}</span>
+      <button type="button" class="reels-close" data-reels-close title="Fermer">✕</button>
+    </div>
+    <div class="reels-info">
+      ${info.challenge ? `<span class="reels-rank-chip">${info.challenge.title}${info.rankLabel? ` · ${info.rankLabel} au classement` : ''}</span>` : ''}
+      <p class="reels-title">${v.title}</p>
+      <p class="reels-desc">${v.description || ''}</p>
+    </div>
+    <div class="reels-actions">
+      <button type="button" class="reels-action ${liked?'liked':''}" data-action="like" data-vid="${v.id}">
+        <span class="icon">${liked?'❤️':'🤍'}</span>
+        <span class="count" data-like-count>${fmtNum(v.likes)}</span>
+      </button>
+      <a href="video.html?id=${v.id}" class="reels-action" style="text-decoration:none">
+        <span class="icon">🔗</span>
+        <span class="count">détail</span>
+      </a>
+    </div>
+  </div>`;
+}
+function buildMyReelsOverlay(){
+  let overlay = document.getElementById('myReelsOverlay');
+  if(overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.className = 'reels-overlay';
+  overlay.id = 'myReelsOverlay';
+  overlay.innerHTML = `<div class="reels-scroller" id="myReelsScroller">${myVideos.map((v,i)=> myReelSlideHtml(v,i)).join('')}</div>`;
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener('click', e=>{
+    if(e.target.closest('[data-reels-close]')){ closeMyReels(); return; }
+    const actionBtn = e.target.closest('[data-action="like"]');
+    if(actionBtn){
+      if(!requireAuth()) return;
+      const v = myVideos.find(x=>x.id===actionBtn.dataset.vid);
+      toggleLike(db, v, me.id);
+      const liked = isLikedByMe(db, v.id, me.id);
+      actionBtn.classList.toggle('liked', liked);
+      actionBtn.querySelector('.icon').textContent = liked ? '❤️' : '🤍';
+      actionBtn.querySelector('[data-like-count]').textContent = fmtNum(v.likes);
+    }
+  });
+
+  const observer = new IntersectionObserver(entries=>{
+    entries.forEach(en=>{
+      const videoEl = en.target.querySelector('.reels-slide-video');
+      if(!videoEl) return;
+      if(en.isIntersecting){
+        if(videoEl.src){ videoEl.play().catch(()=>{}); }
+        else loadVideoBlobURL(videoEl.dataset.videoKey).then(url=>{
+          if(!url) return;
+          videoEl.src = url;
+          videoEl.hidden = false;
+          en.target.classList.add('has-video');
+          videoEl.play().catch(()=>{});
+        });
+      } else if(!videoEl.paused){
+        videoEl.pause();
+      }
+    });
+  }, { root: document.getElementById('myReelsScroller'), threshold:0.6 });
+  overlay.querySelectorAll('.reels-slide').forEach(s=> observer.observe(s));
+}
+function openMyReels(index){
+  buildMyReelsOverlay();
+  const overlay = document.getElementById('myReelsOverlay');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  const scroller = document.getElementById('myReelsScroller');
+  const slide = scroller.querySelectorAll('.reels-slide')[index];
+  if(slide) scroller.scrollTop = index * scroller.clientHeight;
+}
+function closeMyReels(){
+  const overlay = document.getElementById('myReelsOverlay');
+  if(!overlay) return;
+  overlay.querySelectorAll('.reels-slide-video').forEach(v=> v.pause());
+  overlay.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+render();
+</script>
+</body>
+</html>

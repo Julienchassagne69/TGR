@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Statuts — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section">
+  <h1>🏆 Tous les statuts du jeu</h1>
+  <p>Ton profil évolue visuellement selon ton nombre d'abonnés sur la plateforme — voici le nombre d'abonnés requis pour passer à chaque statut.</p>
+  <div class="rank-box" id="rankBox"></div>
+
+  <h2 style="margin-top:50px">💰 Gagner de l'argent avec ta communauté</h2>
+  <p>À partir du statut <b>Voiture de luxe</b>, tu peux lancer des défis réservés à tes abonnés (page <a href="lancer-defi.html" style="color:var(--cyan)">Lancer un défi</a>) et toucher une part de chaque Gold Star attribuée à tes participants. Une Gold Star vaut <b>0,99 €</b> ; plus ton statut est élevé, plus ta part augmente.</p>
+  <div class="card" id="shareTable" style="padding:8px 20px;max-width:560px"></div>
+</main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+document.getElementById('rankBox').innerHTML = `
+  <div class="rank-grid">
+    ${PROGRESSION.map((p,i)=>{
+      const share = CREATOR_SHARE_BY_TIER[p.key];
+      return `
+      <div class="rank-card">
+        <div class="rank-card-photo" style="background-image:${rankPhotoUrl(p.key)}">
+          <span class="rank-card-niv">NIV. ${String(i+1).padStart(2,'0')}</span>
+        </div>
+        <div class="rank-card-label">${p.label}</div>
+        <div class="rank-card-req">${p.followers===0 ? '0 abonné' : fmtNum(p.followers)+' abonnés'}</div>
+        ${share ? `<div style="margin-top:6px"><span class="category-badge category-premium" style="font-size:.68rem">★ ${Math.round(share*100)}% des Gold Stars</span></div>` : ''}
+      </div>
+    `;}).join('')}
+  </div>
+`;
+
+document.getElementById('shareTable').innerHTML = Object.entries(CREATOR_SHARE_BY_TIER).map(([key,share])=>{
+  const p = PROGRESSION.find(x=>x.key===key);
+  return `<div class="rank-table-row" style="display:flex;align-items:center;justify-content:space-between;padding:13px 4px;border-bottom:1px solid var(--line)">
+    <span style="font-weight:700">${statusIconHtml(p.key,20)} ${p.label}</span>
+    <span style="color:var(--gold);font-family:'Bebas Neue',sans-serif;font-size:1.3rem">${Math.round(share*100)}%</span>
+  </div>`;
+}).join('');
+</script>
+</body>
+</html>

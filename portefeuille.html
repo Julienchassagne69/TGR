@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon portefeuille — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section" id="page"></main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+if(!currentUser()){ location.href='login.html'; }
+const db = loadDB();
+const user = currentUser(db);
+injectGRSprite();
+
+let unitFilter = 'tous';
+let typeFilter = 'tous';
+
+const TYPE_LABELS = {
+  recharge:'Recharge', purchase:'Achat', gift:'Cadeau', refund:'Remboursement', admin_correction:'Correction admin',
+};
+const STATUS_LABELS = {
+  pending:['pending','En attente'], success:['success','Réussi'], failed:['failed','Échoué'], cancelled:['cancelled','Annulé'],
+  remboursee:['success','Remboursé'], refund_en_cours:['pending','Remboursement en cours'],
+};
+
+function render(){
+  const breakdown = grBalanceBreakdown(user);
+  document.getElementById('page').innerHTML = `
+    <h1>💼 Mon portefeuille</h1>
+
+    <div class="grid grid-2" style="max-width:640px;gap:16px;margin-bottom:10px">
+      <div class="card" style="padding:20px;text-align:center">
+        ${grIconHtml(30)}
+        <div style="font-size:1.6rem;font-weight:800;margin:8px 0 2px">${fmtNum(breakdown.total)} GR</div>
+        <div style="font-size:.72rem;color:var(--text-faint)">dont ${fmtNum(breakdown.gifted)} offerts · ${fmtNum(breakdown.purchased)} achetés</div>
+        <a href="recharge.html?tab=gr" class="btn btn-gold btn-sm" style="margin-top:12px">+ Recharger des GR</a>
+      </div>
+      <div class="card" style="padding:20px;text-align:center">
+        <div style="font-size:1.8rem">★</div>
+        <div style="font-size:1.6rem;font-weight:800;margin:8px 0 2px">${fmtNum(user.goldStars)} Gold Stars</div>
+        <div style="font-size:.72rem;color:var(--text-faint)">soutien communautaire — jamais convertibles en GR</div>
+        <a href="recharge.html?tab=gold" class="btn btn-primary btn-sm" style="margin-top:12px">+ Recharger des Gold Stars</a>
+      </div>
+    </div>
+    <p style="font-size:.72rem;color:var(--text-faint);max-width:640px">Les gains de concours (récompenses en euros) sont suivis séparément dans ton profil et ne sont jamais convertis automatiquement en GR.</p>
+
+    <h2 style="margin-top:30px">Historique des mouvements</h2>
+    <div class="wardrobe-filter-bar" style="margin-bottom:6px">
+      ${['tous','GR','GOLD'].map(u=>`<span class="wardrobe-filter-chip ${unitFilter===u?'active':''}" data-unit="${u}">${u==='tous'?'Toutes unités':u==='GR'?'GR':'Gold Stars'}</span>`).join('')}
+    </div>
+    <div class="wardrobe-filter-bar" style="margin-bottom:16px">
+      ${['tous','recharge','purchase','gift','refund'].map(t=>`<span class="wardrobe-filter-chip ${typeFilter===t?'active':''}" data-type="${t}">${t==='tous'?'Tous mouvements':TYPE_LABELS[t]}</span>`).join('')}
+    </div>
+
+    <div id="historyList" class="card" style="padding:0;overflow:hidden"></div>
+  `;
+  document.querySelectorAll('[data-unit]').forEach(c=> c.addEventListener('click', ()=>{ unitFilter=c.dataset.unit; render(); }));
+  document.querySelectorAll('[data-type]').forEach(c=> c.addEventListener('click', ()=>{ typeFilter=c.dataset.type; render(); }));
+  renderHistory();
+}
+
+function renderHistory(){
+  let rows = userLedger(db, user.id);
+  if(unitFilter!=='tous') rows = rows.filter(r=>r.unit===unitFilter);
+  if(typeFilter!=='tous') rows = rows.filter(r=>r.type===typeFilter);
+
+  const head = `<div class="wallet-history-row head"><span>Date</span><span>Libellé</span><span class="h-ref">Référence</span><span>Quantité</span><span>Statut</span></div>`;
+  const body = rows.map(r=>{
+    const [cls,label] = STATUS_LABELS[r.status] || ['pending', r.status];
+    const qty = `${r.amount>0?'+':''}${fmtNum(r.amount)} ${r.unit==='GR'?'GR':'★'}`;
+    return `<div class="wallet-history-row">
+      <span>${r.date}</span>
+      <span>${TYPE_LABELS[r.type]||r.type} — ${r.detail||r.ref||''}</span>
+      <span class="h-ref" style="color:var(--text-faint);font-size:.72rem">${r.id.slice(0,10)}</span>
+      <span class="${r.amount>=0?'movement-in':'movement-out'}">${qty}</span>
+      <span class="status-chip ${cls}">${label}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('historyList').innerHTML = head + (body || `<div class="empty">Aucun mouvement pour ces filtres.</div>`);
+}
+
+render();
+</script>
+</body>
+</html>

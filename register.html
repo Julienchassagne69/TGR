@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inscription — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container">
+  <div class="form-card">
+    <h2 style="text-align:center">Créer un compte</h2>
+    <p style="text-align:center;font-size:.8rem">Gratuit — l'inscription et la participation aux défis ne coûtent rien. Les marques paient uniquement pour lancer des défis.</p>
+
+    <div class="tabs" id="typeTabs">
+      <div class="tab active" data-type="player">Joueur</div>
+      <div class="tab" data-type="brand">Marque / Sponsor</div>
+    </div>
+
+    <div class="field"><label>Adresse e-mail</label><input id="email" type="email"></div>
+    <div class="field"><label>Mot de passe</label><input id="pwd" type="password"></div>
+    <div class="field" id="usernameField"><label>Pseudo (unique)</label><input id="username" type="text"></div>
+    <div class="field" id="companyField" style="display:none"><label>Nom de la marque</label><input id="companyName" type="text"></div>
+    <div class="field" id="sloganField" style="display:none"><label>Slogan</label><input id="slogan" type="text" placeholder="Ex : Libère ton énergie." maxlength="80"></div>
+    <div class="field" id="logoField" style="display:none">
+      <label>Logo de la marque</label>
+      <input id="logoFile" type="file" accept="image/*">
+      <div id="logoPreview" style="margin-top:8px"></div>
+    </div>
+    <div class="field" id="dobField"><label>Date de naissance</label><input id="dob" type="date"></div>
+    <div class="field-row">
+      <div class="field"><label>Pays</label><select id="country"></select></div>
+      <div class="field"><label>Langue</label><select id="lang"></select></div>
+    </div>
+    <div class="field checkline" id="parentalField" hidden>
+      <input type="checkbox" id="parental">
+      <label for="parental">J'ai moins de 18 ans et j'ai l'accord de mon représentant légal pour utiliser The Gamer Rich et participer aux défis.</label>
+    </div>
+    <div class="field checkline">
+      <input type="checkbox" id="terms">
+      <label for="terms">J'ai lu et j'accepte les <a href="cgu.html" target="_blank" style="color:var(--cyan)">Conditions Générales d'Utilisation et le Règlement général</a> de The Gamer Rich.</label>
+    </div>
+    <button class="btn btn-primary btn-block" id="registerBtn">Créer mon compte</button>
+    <p id="err" style="color:#ff7070;font-size:.8rem;text-align:center;margin-top:10px"></p>
+    <div class="form-foot">Déjà inscrit ? <a href="login.html">Se connecter</a></div>
+  </div>
+</main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+const db = loadDB();
+let accountType = 'player';
+let uploadedLogo = null;
+
+document.getElementById('country').innerHTML = COUNTRIES.map(c=>`<option value="${c.code}">${c.label}</option>`).join('');
+document.getElementById('lang').innerHTML = LANGS.map(l=>`<option value="${l.code}">${l.flag} ${l.label}</option>`).join('');
+
+document.querySelectorAll('#typeTabs .tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('#typeTabs .tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    accountType = t.dataset.type;
+    const isBrand = accountType==='brand';
+    document.getElementById('usernameField').style.display = isBrand? 'none':'block';
+    document.getElementById('companyField').style.display = isBrand? 'block':'none';
+    document.getElementById('sloganField').style.display = isBrand? 'block':'none';
+    document.getElementById('logoField').style.display = isBrand? 'block':'none';
+    document.getElementById('dobField').style.display = isBrand? 'none':'block';
+    if(isBrand) document.getElementById('parentalField').hidden = true;
+    else updateParentalField();
+  });
+});
+
+// Case "accord parental" affichée dès que la date de naissance indique un
+// mineur (moins de 18 ans) — obligatoire à cocher pour ce cas avant de créer
+// le compte, en plus des CGU.
+function computeAge(dob){
+  if(!dob) return null;
+  return (new Date() - new Date(dob)) / (365.25*86400000);
+}
+function updateParentalField(){
+  const age = computeAge(document.getElementById('dob').value);
+  const isMinor = age!=null && age < 18;
+  document.getElementById('parentalField').hidden = !isMinor;
+  if(!isMinor) document.getElementById('parental').checked = false;
+}
+document.getElementById('dob').addEventListener('change', updateParentalField);
+
+document.getElementById('logoFile').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  uploadedLogo = await fileToResizedDataURL(file, 160);
+  document.getElementById('logoPreview').innerHTML = `<img src="${uploadedLogo}" style="width:64px;height:64px;object-fit:contain;border-radius:10px;background:var(--bg-alt);padding:6px">`;
+});
+
+document.getElementById('registerBtn').addEventListener('click', ()=>{
+  const email = document.getElementById('email').value.trim();
+  const terms = document.getElementById('terms').checked;
+  const err = document.getElementById('err');
+  err.textContent = '';
+
+  if(!email){ err.textContent = 'Adresse e-mail requise.'; return; }
+  if(!terms){ err.textContent = 'Tu dois accepter les conditions.'; return; }
+
+  if(accountType==='brand'){
+    const companyName = document.getElementById('companyName').value.trim();
+    const slogan = document.getElementById('slogan').value.trim();
+    const logo = uploadedLogo || '🏳️';
+    if(!companyName){ err.textContent = 'Nom de la marque requis.'; return; }
+    const id = companyName.toLowerCase().replace(/[^a-z0-9]/g,'-') + '-' + Date.now().toString().slice(-4);
+    const brand = mkBrand(id, companyName, document.getElementById('country').value, logo, '', slogan);
+    brand.cguAccepted = true;
+    brand.cguAcceptedAt = new Date().toISOString();
+    brand.cguAcceptedVersion = CGU_VERSION;
+    db.users.push(brand);
+    saveDB(db);
+    setSession(id);
+    toast('Compte marque créé ! Tu peux maintenant lancer des défis sponsorisés.');
+    setTimeout(()=> location.href='lancer-defi.html', 700);
+    return;
+  }
+
+  const username = document.getElementById('username').value.trim();
+  const dob = document.getElementById('dob').value;
+  if(!username || !dob){ err.textContent = 'Tous les champs sont requis.'; return; }
+  const age = computeAge(dob);
+  if(age < 13){ err.textContent = 'Âge minimum non atteint.'; return; }
+  const isMinor = age < 18;
+  if(isMinor && !document.getElementById('parental').checked){ err.textContent = "L'accord de ton représentant légal est requis pour jouer avant 18 ans."; return; }
+  if(db.users.some(u=>u.username.toLowerCase()===username.toLowerCase())){ err.textContent = 'Ce pseudo est déjà pris.'; return; }
+
+  const id = username.toLowerCase().replace(/[^a-z0-9]/g,'-');
+  db.users.push(mkUser(id, username, document.getElementById('country').value, 0, {
+    wins:0, participations:0, earnings:0, earningsVisible:true, bio:'', lang:document.getElementById('lang').value,
+    cguAccepted:true, cguAcceptedAt:new Date().toISOString(), cguAcceptedVersion:CGU_VERSION,
+    parentalConsent: isMinor, parentalConsentAt: isMinor ? new Date().toISOString() : null,
+  }));
+  saveDB(db);
+  setSession(id);
+  toast('Compte créé !');
+  setTimeout(()=> location.href='profil.html?u='+id, 600);
+});
+</script>
+</body>
+</html>

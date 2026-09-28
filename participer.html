@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Participer — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section">
+  <div class="form-card" style="max-width:440px">
+    <a href="defi.html?id=" id="backLink" style="color:var(--text-faint);font-size:.85rem">← Retour au défi</a>
+    <h2 id="ctitle" style="margin-top:10px"></h2>
+    <p style="font-size:.8rem;color:var(--text-faint)" id="cmeta"></p>
+    <span class="pill">Clôture dans <span id="closeIn"></span></span>
+
+    <div id="form" style="margin-top:16px">
+      <input type="file" id="vFile" accept="video/*" capture="environment" hidden>
+      <div class="composer-frame" id="composerFrame">
+        <video id="previewVideo" playsinline muted loop hidden></video>
+        <div class="composer-placeholder" id="composerPlaceholder">
+          <div style="font-size:2.2rem">🎬</div>
+          <div style="font-weight:700">Ajoute ta vidéo</div>
+          <div style="font-size:.72rem;color:var(--text-faint)" id="placeholderHint"></div>
+        </div>
+        <span class="composer-duration-chip" id="durationChip" hidden></span>
+        <button type="button" class="composer-change-btn" id="changeVideoBtn" hidden title="Changer de vidéo">🔄</button>
+        <div class="composer-caption" id="composerCaption" hidden>
+          <textarea id="vCaption" rows="2" maxlength="220" placeholder="Écris une légende…"></textarea>
+        </div>
+      </div>
+      <p style="font-size:.76rem;color:var(--text-faint);margin-top:10px" id="codeHint"></p>
+
+      <details class="faq-item" style="margin-top:14px">
+        <summary>📜 Règlement de ce défi</summary>
+        <div class="faq-answer" id="challengeRules"></div>
+      </details>
+      <div class="field checkline" style="margin-top:10px">
+        <input type="checkbox" id="acceptRules">
+        <label for="acceptRules">J'ai lu et j'accepte le règlement de ce défi.</label>
+      </div>
+
+      <button class="btn btn-primary btn-block" id="vSubmit" disabled>Envoyer ma participation</button>
+      <p id="err" style="color:#ff7070;font-size:.8rem;margin-top:10px"></p>
+    </div>
+    <div id="blocked" style="display:none;margin-top:16px"></div>
+  </div>
+</main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+if(!currentUser()){ location.href='login.html'; }
+const db = loadDB();
+const user = currentUser(db);
+const id = qs('id');
+const c = db.challenges.find(x=>x.id===id);
+
+if(!c){ location.href='defis.html'; }
+
+document.getElementById('backLink').href = 'defi.html?id='+c.id;
+document.getElementById('ctitle').textContent = c.title;
+const tierCfg = TIER_CONFIG[c.tier] || TIER_CONFIG['mains-nues'];
+document.getElementById('cmeta').innerHTML = `${statusIconHtml(tierCfg.key,16)} ${tierCfg.label} · Récompense ${fmtMoney(c.reward,c.rewardCurrency)}`;
+document.getElementById('closeIn').textContent = countdownLabel(c.closesAt);
+document.getElementById('placeholderHint').textContent = `Format vertical, ${MAX_VIDEO_SECONDS}s max`;
+document.getElementById('codeHint').textContent = `Affiche le code ${c.verificationCode} et ton pseudo à l'écran pendant ta vidéo.`;
+
+// Règlement particulier du défi — le modèle standard "RÈGLEMENT DU DÉFI",
+// dont les champs (nom, sponsor, dates, territoire, dotation...) sont remplis
+// selon ce que le sponsor ou le streamer créateur a défini pour CE défi
+// précis. Complète le règlement général de The Gamer Rich (voir cgu.html),
+// qui prévaut pour tout ce qui n'est pas précisé ici.
+(function(){
+  const territoire = c.targeting?.mode==='global' ? 'Mondial'
+    : c.targeting?.mode==='countries' ? (c.targeting.countries||[]).join(', ')
+    : c.targeting?.mode==='community' ? `Communauté de ${(db.users.find(us=>us.id===c.targeting.communityOwnerId)||{}).display||'—'}`
+    : 'Mondial';
+  const sponsorLine = c.creatorType==='brand' ? (c.sponsor||'—') : 'Aucun — défi lancé par un membre de la communauté';
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('fr-FR',{ day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+
+  document.getElementById('challengeRules').innerHTML = `
+    <p style="font-weight:800;font-size:.82rem;margin-bottom:10px">RÈGLEMENT DU DÉFI N°${c.id}</p>
+    <p><b>Nom :</b> ${c.title}</p>
+    <p><b>Organisateur :</b> The Gamer Rich</p>
+    <p><b>Sponsor :</b> ${sponsorLine}</p>
+    <p><b>Début :</b> ${fmtDate(c.opensAt)}</p>
+    <p><b>Fin :</b> ${fmtDate(c.closesAt)}</p>
+    <p><b>Territoire :</b> ${territoire}</p>
+    <p><b>Participation :</b> GRATUITE</p>
+    <p><b>Dotation totale :</b> ${fmtMoney(c.reward,c.rewardCurrency)}</p>
+
+    <p style="margin-top:16px"><b>Article 1 — Participation</b></p>
+    <p>Le participant doit posséder un compte The Gamer Rich conforme aux CGU. Une participation ne peut être effectuée qu'avec un compte légitime.</p>
+
+    <p style="margin-top:12px"><b>Article 2 — Principe</b></p>
+    <p>Pour participer, le joueur doit : ${c.instructions || 'respecter les instructions de ce défi'}. Il publie ensuite sa vidéo sur The Gamer Rich avant la date limite.</p>
+
+    <p style="margin-top:12px"><b>Article 3 — Détermination du classement</b></p>
+    <p>Le classement est établi en fonction du nombre de likes valides obtenus par chaque vidéo pendant la période prévue. Seuls les likes considérés comme réguliers après contrôle sont pris en compte. Le compteur affiché publiquement est provisoire.</p>
+
+    <p style="margin-top:12px"><b>Article 4 — Un utilisateur = un vote</b></p>
+    <p>Pour un même contenu, un compte ne peut générer qu'un seul vote comptabilisé. The Gamer Rich peut mettre en œuvre des mécanismes techniques destinés à détecter les comportements anormaux.</p>
+
+    <p style="margin-top:12px"><b>Article 5 — Intégrité des votes</b></p>
+    <p>Il est strictement interdit d'obtenir ou tenter d'obtenir artificiellement des votes. Sont notamment susceptibles d'être considérés comme frauduleux : utilisation de bots ou scripts ; création ou utilisation coordonnée de faux comptes ; achat de likes ou votes ; fermes de clics ; comptes créés massivement dans le seul but de voter ; automatisation des interactions ; contournement des dispositifs techniques de sécurité ; toute manipulation destinée à modifier artificiellement le classement.</p>
+    <p>Le simple fait qu'un participant partage sa vidéo et invite sa communauté réelle à voter reste autorisé, sauf règle contraire annoncée pour ce défi. Ce qui est interdit, c'est la fabrication artificielle de votes — pas le fait de mobiliser une vraie communauté.</p>
+    <p>The Gamer Rich peut notamment examiner : ancienneté des comptes, fréquence des votes, répétition anormale d'actions, signaux techniques de fraude, concentration temporelle inhabituelle et autres éléments objectifs pertinents. En cas de votes invalidés, c'est le score officiel (après retrait des votes frauduleux) qui détermine le gagnant, pas le score affiché publiquement.</p>
+
+    <p style="margin-top:12px"><b>Article 6 — Égalité</b></p>
+    <p>Lorsque plusieurs participants occupent exactement la même position après validation définitive des votes, les récompenses correspondant aux positions concernées sont additionnées puis réparties à parts égales entre les participants ex æquo.</p>
+
+    <p style="margin-top:12px"><b>Article 7 — Résultats provisoires</b></p>
+    <p>À la clôture des votes (${fmtDate(c.closesAt)}), un classement provisoire est affiché pendant la vérification des résultats. Le classement officiel est publié après contrôle${c.resultsAt ? `, prévu pour le ${fmtDate(c.resultsAt)}` : ''}. C'est uniquement à partir du classement officiel que le gagnant est contacté.</p>
+
+    <p style="margin-top:12px"><b>Article 8 — Vérification</b></p>
+    <p>Avant versement, The Gamer Rich peut demander les justificatifs strictement nécessaires pour vérifier : identité ; âge ; pays ; respect du règlement ; éligibilité au gain. Si le gagnant ne fournit pas les éléments nécessaires dans un délai fixé après plusieurs relances, le règlement particulier de ce défi précise la procédure applicable à la récompense.</p>
+
+    <p style="margin-top:12px"><b>Article 9 — Réclamation</b></p>
+    <p>Un participant peut contester son classement ou une décision de disqualification dans un délai de 7 jours suivant la publication des résultats officiels. La réclamation doit indiquer le défi concerné et les motifs de la contestation. The Gamer Rich examine la demande et communique sa réponse dans un délai raisonnable.</p>
+
+    <p style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line);font-size:.78rem">Ce règlement particulier complète les <a href="cgu.html" target="_blank" style="color:var(--cyan)">Conditions Générales d'Utilisation et le Règlement général</a> de The Gamer Rich, qui prévalent pour tout ce qui n'est pas précisé ici.</p>
+  `;
+})();
+
+const eligible = canParticipate(db, user, c) && c.status==='active';
+if(!eligible){
+  document.getElementById('form').style.display = 'none';
+  const blocked = document.getElementById('blocked');
+  blocked.style.display = 'block';
+  blocked.innerHTML = `<p style="font-size:.85rem;color:#ff9d9d">🔒 ${c.status!=='active' ? (c.status==='upcoming'?"Ce défi n'est pas encore ouvert.":"Ce défi est terminé.") : eligibilityReason(db, user, c)}</p>`;
+  toast('🔒 '+(c.status!=='active' ? "Ce défi n'est pas ouvert aux participations." : eligibilityReason(db, user, c)));
+}
+
+// ---- Composer façon Insta/Snapchat : on choisit une vidéo, elle se prévisualise
+// aussitôt en plein cadre, la durée est lue automatiquement (plus de champ à
+// remplir à la main), et la légende s'ajoute par-dessus l'aperçu. ----
+const fileInput = document.getElementById('vFile');
+const frame = document.getElementById('composerFrame');
+const placeholder = document.getElementById('composerPlaceholder');
+const previewVideo = document.getElementById('previewVideo');
+const durationChip = document.getElementById('durationChip');
+const captionBox = document.getElementById('composerCaption');
+const changeBtn = document.getElementById('changeVideoBtn');
+const submitBtn = document.getElementById('vSubmit');
+const err = document.getElementById('err');
+const acceptRulesBox = document.getElementById('acceptRules');
+let attachedDuration = null;
+
+// Le bouton n'est activable que si la vidéo est valide ET que le règlement
+// de CE défi a été explicitement accepté (case à cocher dédiée, distincte
+// des CGU générales acceptées une seule fois à l'inscription).
+function updateSubmitEnabled(){
+  const durOk = attachedDuration && attachedDuration <= MAX_VIDEO_SECONDS;
+  submitBtn.disabled = !(durOk && acceptRulesBox.checked);
+}
+acceptRulesBox.addEventListener('change', updateSubmitEnabled);
+
+frame.addEventListener('click', (e)=>{
+  if(frame.classList.contains('has-video')) return;
+  fileInput.click();
+});
+changeBtn.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  fileInput.value = '';
+  resetComposer();
+});
+
+function resetComposer(){
+  attachedDuration = null;
+  previewVideo.pause();
+  previewVideo.removeAttribute('src');
+  previewVideo.load();
+  previewVideo.hidden = true;
+  placeholder.hidden = false;
+  frame.classList.remove('has-video');
+  durationChip.hidden = true;
+  changeBtn.hidden = true;
+  captionBox.hidden = true;
+  submitBtn.disabled = true;
+}
+
+fileInput.addEventListener('change', ()=>{
+  const file = fileInput.files[0];
+  if(!file) return;
+  err.textContent = '';
+  if(!looksLikeVideoFile(file)){ err.textContent = 'Sélectionne un fichier vidéo (MP4, MOV…).'; return; }
+
+  previewVideo.src = URL.createObjectURL(file);
+  previewVideo.hidden = false;
+  placeholder.hidden = true;
+  frame.classList.add('has-video');
+  changeBtn.hidden = false;
+  captionBox.hidden = false;
+  durationChip.hidden = false;
+  durationChip.textContent = '…';
+  submitBtn.disabled = true;
+
+  previewVideo.addEventListener('loadedmetadata', ()=>{
+    const dur = Math.max(1, Math.round(previewVideo.duration));
+    attachedDuration = dur;
+    durationChip.textContent = `⏱ ${dur}s`;
+    if(dur > MAX_VIDEO_SECONDS){
+      durationChip.classList.add('over-limit');
+      err.textContent = `Ta vidéo fait ${dur}s — le maximum pour ce défi est ${MAX_VIDEO_SECONDS}s. Choisis un autre extrait (🔄).`;
+    } else {
+      durationChip.classList.remove('over-limit');
+    }
+    updateSubmitEnabled();
+  }, { once:true });
+
+  previewVideo.addEventListener('error', ()=>{
+    durationChip.hidden = true;
+    submitBtn.disabled = true;
+    err.textContent = 'Ce fichier vidéo ne peut pas être lu par le navigateur. Essaie un export MP4 (H.264), le format le plus compatible.';
+  }, { once:true });
+
+  previewVideo.play().catch(()=>{});
+}, false);
+
+document.getElementById('vSubmit').addEventListener('click', async ()=>{
+  err.textContent = '';
+  const file = fileInput.files[0];
+  if(!file){ err.textContent = 'Ajoute une vidéo avant de publier.'; return; }
+  if(!attachedDuration){ err.textContent = 'Vidéo en cours de chargement — réessaie dans un instant.'; return; }
+  if(attachedDuration > MAX_VIDEO_SECONDS){ err.textContent = `La vidéo ne doit pas dépasser ${MAX_VIDEO_SECONDS} secondes.`; return; }
+  if(!acceptRulesBox.checked){ err.textContent = 'Tu dois accepter le règlement de ce défi.'; return; }
+  if(c.maxParticipations && (c.participants||[]).filter(pid=>pid===user.id).length >= c.maxParticipations){
+    err.textContent = 'Tu as atteint le nombre maximum de participations pour ce défi.'; return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Envoi en cours…';
+
+  const caption = document.getElementById('vCaption').value.trim();
+  const title = caption ? (caption.length>60 ? caption.slice(0,57)+'…' : caption) : c.title;
+  const videoId = 'v'+Date.now();
+  const videoKey = 'idb-'+videoId;
+  const saved = await saveVideoBlob(videoKey, file);
+  db.videos.push({
+    id:videoId, userId:user.id, title, description:caption,
+    category:'Participation à un défi', thumbnail:'🎬',
+    embedUrl: saved ? ('idb:'+videoKey) : '', lang:user.lang||'fr', durationSec:attachedDuration,
+    likes:0, comments:[], challengeId:c.id,
+    publishedAt:new Date().toISOString().slice(0,10), status:'published'
+  });
+  db.submissions.push({
+    id:'s'+Date.now(), challengeId:c.id, userId:user.id, videoId, status:'published', goldStars:0,
+    submittedAt:new Date().toISOString().slice(0,10), videoLocked:true,
+    rulesAccepted:true, rulesAcceptedAt:new Date().toISOString(),
+  });
+  if(!c.participants.includes(user.id)) c.participants.push(user.id);
+  user.participations = (user.participations||0) + 1;
+  saveDB(db);
+  toast('Participation publiée — direction le classement du défi !');
+  setTimeout(()=> location.href='defi.html?id='+c.id, 900);
+});
+</script>
+</body>
+</html>

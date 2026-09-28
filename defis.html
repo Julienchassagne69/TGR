@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Défis — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section">
+  <div class="section-head">
+    <h1>Défis</h1>
+  </div>
+  <p style="margin-top:-10px">Défis sponsorisés par des marques, ou lancés par des joueurs statut Villa et plus à leur communauté. Toujours un créateur identifié, jamais un défi lancé en direct entre deux joueurs.</p>
+
+  <div class="tabs" id="statusTabs">
+    <div class="tab active" data-s="all">Tous</div>
+    <div class="tab" data-s="active">En cours</div>
+    <div class="tab" data-s="upcoming">À venir</div>
+    <div class="tab" data-s="closed">Terminés</div>
+  </div>
+
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <select id="tierFilter"><option value="">Toutes catégories</option></select>
+  </div>
+
+  <div class="grid grid-3" id="grid"></div>
+</main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+const db = loadDB();
+let status = 'all';
+
+document.getElementById('tierFilter').innerHTML += PROGRESSION.map(p=>`<option value="${p.key}">${p.icon} ${p.label}</option>`).join('');
+
+document.querySelectorAll('#statusTabs .tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('#statusTabs .tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    status = t.dataset.s;
+    render();
+  });
+});
+document.getElementById('tierFilter').addEventListener('change', render);
+
+function render(){
+  const tier = document.getElementById('tierFilter').value;
+  const list = db.challenges.filter(c=>{
+    if(c.approvalStatus==='pending') return false;
+    if(status!=='all' && c.status!==status) return false;
+    if(tier && c.tier!==tier) return false;
+    return true;
+  }).sort((a,b)=> new Date(b.opensAt) - new Date(a.opensAt));
+
+  document.getElementById('grid').innerHTML = list.map(c=>{
+    const tierCfg = TIER_CONFIG[c.tier] || TIER_CONFIG['mains-nues'];
+    const premium = levelRank(c.tier) >= levelRank('villa');
+    const timeLabel = c.status==='closed' ? c.participants.length+' participants' : countdownLabel(c.status==='upcoming'?c.opensAt:c.closesAt)+(c.status==='upcoming'?' avant ouverture':' restant');
+    return `<a href="defi.html?id=${c.id}" class="card">
+      <div class="card-thumb" style="${challengeThumbBg(c.id)}">${thumbBadge(c.image)}${sponsorBadgeHtml(c)}<span class="overlay-badge">${c.status==='closed'?'🏁':'⏱'} ${timeLabel}</span></div>
+      <div class="card-body">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <span class="category-badge ${premium?'category-premium':''}">${statusIconHtml(tierCfg.key,16)} ${tierCfg.label}</span>
+          ${c.isEvent? `<span class="event-badge">🎆 Événement</span>` : ''}
+        </div>
+        <div class="card-title">${c.title}</div>
+        ${c.sponsor? `<div style="font-size:.78rem;color:var(--text-faint)">${logoHtml(c.sponsorLogo,16)} ${c.creatorType==='brand'?'Sponsor':'Créateur'} : ${c.sponsor}</div>` : ''}
+      </div>
+      <div class="card-foot">
+        <span style="color:var(--gold);font-weight:800" class="reward-count" data-reward="${c.reward}" data-currency="${c.rewardCurrency||'€'}">0 ${c.rewardCurrency||'€'}</span>
+        <span style="color:var(--cyan);font-weight:700">Participer →</span>
+      </div>
+    </a>`;
+  }).join('') || `<div class="empty">Aucun défi dans cette catégorie.</div>`;
+  document.querySelectorAll('.reward-count').forEach(el=>{
+    animateCountUp(el, +el.dataset.reward, n=>fmtMoney(Math.round(n), el.dataset.currency));
+  });
+}
+render();
+</script>
+</body>
+</html>

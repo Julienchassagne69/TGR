@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vidéo — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=33">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section" id="page"></main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=33"></script>
+<script src="js/economy.js?v=33"></script>
+<script src="js/i18n.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script>
+const db = loadDB();
+const id = qs('id');
+const v = db.videos.find(x=>x.id===id) || db.videos[0];
+const u = db.users.find(x=>x.id===v.userId);
+const user = currentUser(db);
+const sub = db.submissions.find(s=>s.videoId===v.id);
+const challenge = v.challengeId ? db.challenges.find(c=>c.id===v.challengeId) : null;
+
+function render(){
+  const eligible = challenge && sub && sub.status==='published' && challenge.status==='active';
+  const liked = user && isLikedByMe(db, v.id, user.id);
+  const canStar = eligible && user && sub.userId!==user.id && user.goldStars>=1;
+  const canStarBtn = eligible && user && sub.userId!==user.id;
+
+  document.getElementById('page').innerHTML = `
+    <a href="videos.html" style="color:var(--text-faint);font-size:.85rem">← Toutes les vidéos</a>
+    <div class="grid grid-2" style="margin-top:14px;align-items:start">
+      <div>
+        <div class="hero-media" id="videoHero" style="aspect-ratio:16/9;${thumbBg(v.id)}">
+          ${v.embedUrl && v.embedUrl.startsWith('idb:') ? `<video id="realVideo" playsinline controls loop hidden style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;background:#000"></video>` : ''}
+          ${thumbBadge(v.thumbnail)}${v.durationSec? `<span class="clip-length">0:${String(v.durationSec).padStart(2,'0')}</span>`:''}
+        </div>
+        <h1 style="margin-top:16px">${v.title}</h1>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+          <a href="profil.html?u=${u.id}" style="font-weight:700">${u.display}</a>
+          ${levelBadge(u.level)}
+          <span class="pill">${new Date(v.publishedAt).toLocaleDateString('fr-FR')}</span>
+          ${v.durationSec? `<span class="duration-badge">⏱ ${v.durationSec}s</span>` : ''}
+        </div>
+        <p>${v.description || 'Aucune description.'}</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0">
+          <button class="btn ${liked?'btn-primary':'btn-outline'} btn-sm like-btn ${liked?'liked':''}" id="likeBtn">${liked?'❤️':'🤍'} J'aime (${v.likes})</button>
+          ${canStarBtn ? `<button class="btn btn-sm btn-gold" id="starBtn" ${canStar?'':'disabled title="Solde Gold Stars insuffisant"'}>★ Soutenir (1 Gold Star)</button>` : ''}
+          <button class="btn btn-outline btn-sm" id="shareBtn">🔗 Partager</button>
+          <button class="btn btn-outline btn-sm" id="reportBtn">⚑ Signaler</button>
+        </div>
+        ${challenge ? `<a href="defi.html?id=${challenge.id}" class="pill">Participe au défi : ${challenge.title}</a> <span class="duration-badge">⏱ ${challenge.duration}</span>${eligible? ` <span class="pill">Chaque j'aime compte pour le classement du défi</span>`:''}` : ''}
+
+        <h3 style="margin-top:30px">Commentaires (${v.comments.length})</h3>
+        <div id="comments"></div>
+        <div class="field" style="margin-top:14px">
+          <textarea id="commentInput" rows="2" placeholder="${user? 'Ajouter un commentaire...' : 'Connecte-toi pour commenter'}" ${user?'':'disabled'}></textarea>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="commentBtn" ${user?'':'disabled'}>Commenter</button>
+      </div>
+      <div>
+        <div class="card" style="padding:16px">
+          <h3 style="margin-top:0">Catégorie</h3>
+          <span class="pill">${v.category}</span>
+          ${sub ? `<h3>Statut de la participation</h3><span class="state-chip state-${sub.status==='published'?'published':sub.status==='pending'?'pending':'refused'}">${sub.status}</span>
+            <p style="margin-top:10px;font-size:.8rem">❤️ ${fmtNum(v.likes)} j'aime · ★ ${sub.goldStars} Gold Stars · score ${fmtNum(scoreOf(v,sub))}</p>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('comments').innerHTML = v.comments.map(cm=>`
+    <div style="padding:10px 0;border-bottom:1px solid var(--line)">
+      <b style="font-size:.85rem">${cm.author}</b>
+      <p style="margin:4px 0 0;font-size:.85rem">${cm.text}</p>
+    </div>
+  `).join('') || `<p style="color:var(--text-faint);font-size:.85rem">Aucun commentaire pour l'instant.</p>`;
+
+  document.getElementById('likeBtn').addEventListener('click', ()=>{
+    if(!requireAuth()) return;
+    toggleLike(db, v, user.id);
+    render();
+  });
+  const starBtn = document.getElementById('starBtn');
+  if(starBtn) starBtn.addEventListener('click', ()=>{
+    if(!requireAuth() || starBtn.disabled) return;
+    spendGoldStarOnSubmission(db, user, sub, challenge);
+    toast('★ Gold Star attribuée — merci pour ton soutien !');
+    render();
+  });
+  document.getElementById('shareBtn').addEventListener('click', ()=>{
+    navigator.clipboard?.writeText(location.href).catch(()=>{});
+    toast('Lien copié dans le presse-papiers.');
+  });
+  document.getElementById('reportBtn').addEventListener('click', ()=>{
+    if(!requireAuth()) return;
+    toast('Signalement envoyé à la modération.');
+  });
+  document.getElementById('commentBtn').addEventListener('click', ()=>{
+    if(!requireAuth()) return;
+    const input = document.getElementById('commentInput');
+    if(!input.value.trim()) return;
+    v.comments.push({ author:user.display, text:input.value.trim() });
+    saveDB(db);
+    render();
+  });
+
+  mountRealVideo();
+}
+// La vraie vidéo (IndexedDB, voir js/app.js) est résolue une seule fois par
+// chargement de page et réutilisée si render() est rappelé (like, commentaire…).
+let realVideoUrl = null;
+function mountRealVideo(){
+  const videoEl = document.getElementById('realVideo');
+  if(!videoEl) return;
+  if(realVideoUrl){ videoEl.src = realVideoUrl; videoEl.hidden = false; return; }
+  loadVideoBlobURL(v.embedUrl.slice(4)).then(url=>{
+    if(!url) return;
+    realVideoUrl = url;
+    const el = document.getElementById('realVideo');
+    if(el){ el.src = url; el.hidden = false; }
+  });
+}
+render();
+</script>
+</body>
+</html>
