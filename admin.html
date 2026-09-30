@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Administration — The Gamer Rich</title>
-<link rel="stylesheet" href="css/style.css?v=33">
+<link rel="stylesheet" href="css/style.css?v=34">
 </head>
 <body>
 <div class="bg-fx"></div>
@@ -22,6 +22,7 @@
       <a data-p="submissions">Participations</a>
       <a data-p="moderation">Modération</a>
       <a data-p="rewards">Récompenses</a>
+      <a data-p="cashouts">Retraits (cashout)</a>
       <a data-p="goldstars">Gold Stars</a>
       <a data-p="security">Sécurité anti-fraude</a>
       <a data-p="progression">Paliers visuels</a>
@@ -34,10 +35,10 @@
 
 <div id="footer-root"></div>
 
-<script src="js/data.js?v=33"></script>
-<script src="js/economy.js?v=33"></script>
-<script src="js/i18n.js?v=33"></script>
-<script src="js/app.js?v=33"></script>
+<script src="js/data.js?v=34"></script>
+<script src="js/economy.js?v=34"></script>
+<script src="js/i18n.js?v=34"></script>
+<script src="js/app.js?v=34"></script>
 <script>
 const db = loadDB();
 const admin = currentUser(db) ? currentUser(db).display : 'Admin démo';
@@ -240,6 +241,66 @@ function render(){
         c.rewardState = s.value; saveDB(db); logAction('Mise à jour récompense', c.title+' → '+s.value); render();
       });
     });
+  }
+
+  if(page==='cashouts'){
+    const list = db.cashouts.slice().reverse();
+    const ID_LABELS = { cni:"Carte d'identité", passeport:'Passeport', sejour:'Titre de séjour' };
+    const DOC_LABELS = { proofAddress:'Justificatif de domicile', idFront:'Pièce — recto', idBack:'Pièce — verso', selfie:'Selfie avec pièce', ribFile:'RIB', repId:'Pièce du représentant' };
+    el.innerHTML = `<h3>Demandes de retrait</h3>
+      <p style="font-size:.8rem;color:var(--text-faint)">Vérifie que le nom de la pièce d'identité, du RIB et du titulaire du compte correspondent avant d'approuver. Le virement lui-même se fait hors du site pour l'instant.</p>
+      <table class="admin-table">
+      <thead><tr><th>Date</th><th>Joueur</th><th>Montant</th><th>Statut</th><th></th></tr></thead>
+      <tbody>${list.map(c=>{
+        const u = db.users.find(x=>x.id===c.userId);
+        const [cls,label] = CASHOUT_STATUS[c.status] || ['pending', c.status];
+        const i = c.identity, a = c.address;
+        return `<tr>
+          <td>${new Date(c.createdAt).toLocaleDateString('fr-FR')}</td>
+          <td>${u? u.display : c.userId}${c.legalRep? ' <span class="pill">Mineur</span>' : ''}</td>
+          <td>${fmtMoney(c.amount,'€')}</td>
+          <td><span class="status-chip ${cls}">${label}</span></td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-ghost btn-sm coToggle" data-id="${c.id}">Dossier</button>
+            ${c.status==='en_verification' ? `<button class="btn btn-primary btn-sm coSet" data-id="${c.id}" data-s="approuvee">Approuver</button>
+              <button class="btn btn-ghost btn-sm coSet" data-id="${c.id}" data-s="refusee">Refuser</button>` : ''}
+            ${c.status==='approuvee' ? `<button class="btn btn-gold btn-sm coSet" data-id="${c.id}" data-s="versee">Marquer versée</button>` : ''}
+          </td>
+        </tr>
+        <tr class="coDetail" data-id="${c.id}" hidden><td colspan="5" style="font-size:.8rem;line-height:1.6">
+          <b>${i.firstName} ${i.lastName}</b> — né(e) le ${i.dob} à ${i.birthPlace} · ${i.nationality}<br>
+          ${i.email} · ${i.phone}<br>
+          ${a.street}${a.street2? ', '+a.street2 : ''}, ${a.zip} ${a.city}, ${a.country}<br>
+          ${ID_LABELS[c.idDoc.type]||c.idDoc.type} n° ${c.idDoc.number} (expire le ${c.idDoc.expiry})<br>
+          RIB : ${c.bank.holder} · ${c.bank.iban} · ${c.bank.bic}${c.bank.bankName? ' · '+c.bank.bankName : ''}<br>
+          ${c.legalRep? `Représentant légal : ${c.legalRep.firstName} ${c.legalRep.lastName} (${c.legalRep.link}) · ${c.legalRep.email} · ${c.legalRep.phone}<br>` : ''}
+          Documents : ${Object.entries(c.docs||{}).map(([k,d])=>`<a href="#" class="coDoc" data-key="${d.key}">${DOC_LABELS[k]||k}</a>`).join(' · ') || '—'}
+          ${c.adminNote? `<br>Note : ${c.adminNote}` : ''}
+        </td></tr>`;
+      }).join('') || `<tr><td colspan="5">Aucune demande de retrait.</td></tr>`}</tbody></table>`;
+    document.querySelectorAll('.coToggle').forEach(b=> b.addEventListener('click', ()=>{
+      const row = document.querySelector(`.coDetail[data-id="${b.dataset.id}"]`);
+      row.hidden = !row.hidden;
+    }));
+    document.querySelectorAll('.coDoc').forEach(l=> l.addEventListener('click', async e=>{
+      e.preventDefault();
+      const url = await loadVideoBlobURL(l.dataset.key);
+      if(url) window.open(url, '_blank'); else toast('Document introuvable sur ce navigateur.');
+    }));
+    document.querySelectorAll('.coSet').forEach(b=> b.addEventListener('click', ()=>{
+      const c = db.cashouts.find(x=>x.id===b.dataset.id);
+      const u = db.users.find(x=>x.id===c.userId);
+      if(b.dataset.s==='refusee'){
+        const reason = prompt('Motif du refus (visible par le joueur) :');
+        if(reason===null) return;
+        c.adminNote = reason || 'Dossier non conforme';
+      }
+      c.status = b.dataset.s;
+      c[b.dataset.s+'At'] = new Date().toISOString();
+      saveDB(db);
+      logAction('Cashout '+(CASHOUT_STATUS[c.status]||[,c.status])[1], (u? u.display : c.userId)+' — '+fmtMoney(c.amount,'€'));
+      render();
+    }));
   }
 
   if(page==='goldstars'){

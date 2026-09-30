@@ -316,3 +316,21 @@ function refundRecharge(db, admin, ledgerEntryId, reason){
   return { ok:true };
 }
 
+
+/* ============ Cashout (retrait des gains de concours en euros) ============
+   Les gains (u.earnings) sont un cumul "à vie" : on ne les diminue jamais.
+   Le montant retirable = gains - toute demande de retrait non refusée
+   (en vérification, approuvée ou versée). Prototype : le vrai virement et
+   la vérification d'identité se feront côté serveur (Stripe Connect). */
+const CASHOUT_MIN = 10;
+const CASHOUT_STATUS = {
+  en_verification:['pending','En vérification'], approuvee:['pending','Approuvée — virement en préparation'],
+  versee:['success','Versée'], refusee:['failed','Refusée'],
+};
+function userCashouts(db, userId){
+  return (db.cashouts||[]).filter(c=>c.userId===userId);
+}
+function cashoutAvailable(db, u){
+  const locked = userCashouts(db, u.id).filter(c=>c.status!=='refusee').reduce((a,c)=>a+c.amount,0);
+  return Math.max(0, Math.round(((u.earnings||0) - locked)*100)/100);
+}

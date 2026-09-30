@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Profil — The Gamer Rich</title>
-<link rel="stylesheet" href="css/style.css?v=33">
+<link rel="stylesheet" href="css/style.css?v=34">
 </head>
 <body>
 <div class="bg-fx"></div>
@@ -14,10 +14,10 @@
 
 <div id="footer-root"></div>
 
-<script src="js/data.js?v=33"></script>
-<script src="js/economy.js?v=33"></script>
-<script src="js/i18n.js?v=33"></script>
-<script src="js/app.js?v=33"></script>
+<script src="js/data.js?v=34"></script>
+<script src="js/economy.js?v=34"></script>
+<script src="js/i18n.js?v=34"></script>
+<script src="js/app.js?v=34"></script>
 <script>
 const db = loadDB();
 const me = currentUser(db);
@@ -69,7 +69,10 @@ function render(){
           <div class="stat-card"><div class="num">${fmtNum(u.followers)}</div>Abonnés<div style="font-size:.7rem;color:var(--text-faint);margin-top:2px">${fmtNum((db.follows[u.id]||[]).length)} abonnements</div></div>
           <div class="stat-card"><div class="num">${u.participations}</div>Participations</div>
           <div class="stat-card"><div class="num">🏆 ${u.wins}</div>Défis gagnés</div>
-          <div class="stat-card"><div class="num">${u.earningsVisible ? '💰 '+fmtMoney(u.earnings,'€') : '🔒'}</div>Gains totaux gagnés</div>
+          <div class="stat-card"><div class="num">${u.earningsVisible || isMe ? '💰 '+fmtMoney(u.earnings,'€') : '🔒'}</div>Gains totaux gagnés
+            ${isMe ? `<a href="cashout.html" class="btn btn-cashout btn-sm" style="margin-top:10px">💸 Cashout</a>
+              <div style="font-size:.7rem;color:var(--text-faint);margin-top:6px">${fmtMoney(cashoutAvailable(db,u),'€')} retirables</div>` : ''}
+          </div>
         </div>
         ${next ? `
           <div style="margin-top:18px">

@@ -859,7 +859,7 @@ function mkVideo(id,userId,title,thumb,category,challengeId,likes,date,durationS
 // deux cas on continue quand même avec des données en mémoire — normalisées
 // pour ne jamais planter la page — plutôt que de laisser une exception non
 // rattrapée sur `const db = loadDB()` empêcher tout le reste de s'exécuter.
-const DB_ARRAY_FIELDS = ['users','challenges','videos','tips','crews','submissions','goldTx','sponsorTx','notifications','adminLog','statusUps','donations','customCosmetics'];
+const DB_ARRAY_FIELDS = ['users','challenges','videos','tips','crews','submissions','goldTx','sponsorTx','notifications','adminLog','statusUps','donations','customCosmetics','cashouts'];
 const DB_OBJECT_FIELDS = ['likedBy','follows'];
 function normalizeDB(db){
   db = db || {};

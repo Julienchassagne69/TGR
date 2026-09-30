@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cashout — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=34">
+</head>
+<body>
+<div class="bg-fx"></div>
+<div id="nav-root"></div>
+
+<main class="container section" id="page"></main>
+
+<div id="footer-root"></div>
+
+<script src="js/data.js?v=34"></script>
+<script src="js/economy.js?v=34"></script>
+<script src="js/i18n.js?v=34"></script>
+<script src="js/app.js?v=34"></script>
+<script>
+if(!currentUser()){ location.href='login.html'; }
+const db = loadDB();
+const user = currentUser(db);
+
+const ADDR_COUNTRIES = ['France','Belgique','Suisse','Luxembourg','Canada','Monaco','Autre'];
+const ID_TYPES = { cni:"Carte nationale d'identité", passeport:'Passeport', sejour:'Titre de séjour' };
+const MAX_FILE_MB = 10;
+
+function computeAge(dob){
+  if(!dob) return null;
+  return (new Date() - new Date(dob)) / (365.25*86400000);
+}
+// Contrôle officiel d'un IBAN (norme ISO 13616, modulo 97) : repère les
+// fautes de frappe avant d'envoyer la demande, sans rien garantir de plus.
+function isValidIban(raw){
+  const iban = raw.replace(/\s+/g,'').toUpperCase();
+  if(!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(iban)) return false;
+  const moved = (iban.slice(4) + iban.slice(0,4)).replace(/[A-Z]/g, ch=> String(ch.charCodeAt(0)-55));
+  let rest = 0;
+  for(const d of moved) rest = (rest*10 + +d) % 97;
+  return rest===1;
+}
+function maskIban(raw){
+  const iban = raw.replace(/\s+/g,'').toUpperCase();
+  return iban.slice(0,4) + ' •••• •••• ' + iban.slice(-4);
+}
+function val(id){ const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function checked(id){ const el = document.getElementById(id); return !!(el && el.checked); }
+function fileField(id, label, hint){
+  return `<div class="field"><label for="${id}">${label}</label>
+    <input id="${id}" type="file" accept="image/*,application/pdf">
+    ${hint? `<div style="font-size:.7rem;color:var(--text-faint);margin-top:4px">${hint}</div>` : ''}</div>`;
+}
+
+function historyHtml(){
+  const rows = userCashouts(db, user.id).slice().reverse();
+  if(!rows.length) return '';
+  return `<h2 style="margin-top:34px">Mes demandes de retrait</h2>
+    <div class="card" style="padding:0;overflow:hidden">
+      ${rows.map(c=>{
+        const [cls,label] = CASHOUT_STATUS[c.status] || ['pending', c.status];
+        return `<div class="rank-row">
+          <div class="rank-name">${fmtMoney(c.amount,'€')} vers ${c.bank.ibanMasked}
+            <small>Demandé le ${new Date(c.createdAt).toLocaleDateString('fr-FR')}${c.adminNote? ' · '+c.adminNote : ''}</small></div>
+          <span class="status-chip ${cls}">${label}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function render(){
+  const available = cashoutAvailable(db, user);
+  const pending = userCashouts(db, user.id).some(c=>c.status==='en_verification');
+  const page = document.getElementById('page');
+
+  if(user.accountType==='brand'){
+    page.innerHTML = `<div class="empty">Le cashout est réservé aux joueurs qui ont remporté des défis.</div>`;
+    return;
+  }
+
+  const head = `
+    <div class="cashout-shell">
+      <h1>💸 Cashout</h1>
+      <div class="grid grid-2" style="gap:16px;margin-bottom:18px">
+        <div class="stat-card"><div class="num">💰 ${fmtMoney(user.earnings||0,'€')}</div>Gains totaux gagnés</div>
+        <div class="stat-card"><div class="num" style="color:var(--gold)">${fmtMoney(available,'€')}</div>Montant retirable</div>
+      </div>`;
+
+  if(pending || available < CASHOUT_MIN){
+    page.innerHTML = head + `
+      <div class="card" style="padding:22px;text-align:center">
+        ${pending
+          ? `<p style="margin:0">⏳ Une demande de retrait est déjà en cours de vérification. Tu pourras en faire une nouvelle une fois celle-ci traitée.</p>`
+          : `<p style="margin:0">Le retrait est possible à partir de <b>${fmtMoney(CASHOUT_MIN,'€')}</b> de gains retirables. Remporte des défis pour débloquer ton premier cashout !</p>
+             <a href="defis.html" class="btn btn-primary btn-sm" style="margin-top:14px">Voir les défis</a>`}
+      </div>
+      ${historyHtml()}
+    </div>`;
+    return;
+  }
+
+  page.innerHTML = head + `
+      <div class="demo-payment-note">🔒 Pour te verser tes gains en toute légalité, nous devons vérifier ton identité (obligation de lutte contre la fraude et le blanchiment). Tes documents servent uniquement à cette vérification.</div>
+
+      <div class="card cashout-step">
+        <h3><span class="n">1</span>Montant à retirer</h3>
+        <p class="hint">Minimum ${fmtMoney(CASHOUT_MIN,'€')} — maximum ${fmtMoney(available,'€')}.</p>
+        <div class="field"><label for="amount">Montant (€)</label>
+          <input id="amount" type="number" min="${CASHOUT_MIN}" max="${available}" step="0.01" value="${available}"></div>
+      </div>
+
+      <div class="card cashout-step">
+        <h3><span class="n">2</span>Identité</h3>
+        <p class="hint">Exactement comme sur ta pièce d'identité.</p>
+        <div class="field-row">
+          <div class="field"><label for="lastName">Nom</label><input id="lastName" autocomplete="family-name"></div>
+          <div class="field"><label for="firstName">Prénom(s)</label><input id="firstName" autocomplete="given-name"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label for="dob">Date de naissance</label><input id="dob" type="date" autocomplete="bday"></div>
+          <div class="field"><label for="birthPlace">Lieu de naissance</label><input id="birthPlace" placeholder="Ville, pays"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label for="nationality">Nationalité</label><input id="nationality" placeholder="Française"></div>
+          <div class="field"><label for="phone">Téléphone</label><input id="phone" type="tel" autocomplete="tel"></div>
+        </div>
+        <div class="field"><label for="email">E-mail</label><input id="email" type="email" autocomplete="email"></div>
+      </div>
+
+      <div class="card cashout-step">
+        <h3><span class="n">3</span>Adresse postale</h3>
+        <p class="hint">Ton adresse de résidence actuelle.</p>
+        <div class="field"><label for="street">Numéro et rue</label><input id="street" autocomplete="address-line1"></div>
+        <div class="field"><label for="street2">Complément (facultatif)</label><input id="street2" autocomplete="address-line2"></div>
+        <div class="field-row">
+          <div class="field"><label for="zip">Code postal</label><input id="zip" autocomplete="postal-code"></div>
+          <div class="field"><label for="city">Ville</label><input id="city" autocomplete="address-level2"></div>
+        </div>
+        <div class="field"><label for="addrCountry">Pays</label>
+          <select id="addrCountry">${ADDR_COUNTRIES.map(c=>`<option>${c}</option>`).join('')}</select></div>
+        ${fileField('proofAddress', 'Justificatif de domicile de moins de 3 mois', "Facture d'énergie, d'internet ou de téléphone, avis d'imposition, quittance de loyer…")}
+      </div>
+
+      <div class="card cashout-step">
+        <h3><span class="n">4</span>Pièce d'identité</h3>
+        <p class="hint">Document en cours de validité, photo nette, les 4 coins visibles. Formats : image ou PDF, ${MAX_FILE_MB} Mo maximum.</p>
+        <div class="field"><label for="idType">Type de document</label>
+          <select id="idType">${Object.entries(ID_TYPES).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select></div>
+        <div class="field-row">
+          <div class="field"><label for="idNumber">Numéro du document</label><input id="idNumber"></div>
+          <div class="field"><label for="idExpiry">Date d'expiration</label><input id="idExpiry" type="date"></div>
+        </div>
+        <div class="field-row">
+          ${fileField('idFront', 'Recto')}
+          ${fileField('idBack', 'Verso', 'Non demandé pour un passeport.')}
+        </div>
+        ${fileField('selfie', 'Selfie en tenant ta pièce d\'identité', 'Ton visage et le document doivent être bien visibles.')}
+      </div>
+
+      <div class="card cashout-step">
+        <h3><span class="n">5</span>Coordonnées bancaires (RIB)</h3>
+        <p class="hint">Le compte doit être à ton nom (ou à celui de ton représentant légal si tu as moins de 18 ans).</p>
+        <div class="field"><label for="holder">Titulaire du compte</label><input id="holder"></div>
+        <div class="field-row">
+          <div class="field" style="flex:2"><label for="iban">IBAN</label><input id="iban" placeholder="FR76 3000 6000 0112 3456 7890 189" autocomplete="off"></div>
+          <div class="field"><label for="bic">BIC</label><input id="bic" placeholder="AGRIFRPP" autocomplete="off"></div>
+        </div>
+        <div class="field"><label for="bankName">Nom de la banque</label><input id="bankName"></div>
+        ${fileField('ribFile', 'RIB (document de la banque)')}
+      </div>
+
+      <div class="card cashout-step" id="minorStep" hidden>
+        <h3><span class="n">6</span>Représentant légal</h3>
+        <p class="hint">Tu as moins de 18 ans : ton parent ou tuteur légal doit autoriser le retrait et fournir sa propre pièce d'identité.</p>
+        <div class="field-row">
+          <div class="field"><label for="repLastName">Nom</label><input id="repLastName"></div>
+          <div class="field"><label for="repFirstName">Prénom</label><input id="repFirstName"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label for="repLink">Lien avec toi</label>
+            <select id="repLink"><option>Mère</option><option>Père</option><option>Tuteur / tutrice légal(e)</option></select></div>
+          <div class="field"><label for="repPhone">Téléphone</label><input id="repPhone" type="tel"></div>
+        </div>
+        <div class="field"><label for="repEmail">E-mail</label><input id="repEmail" type="email"></div>
+        ${fileField('repId', "Pièce d'identité du représentant légal")}
+        <div class="checkline"><input type="checkbox" id="repConsent"><label for="repConsent">Je suis le représentant légal de ce joueur et j'autorise le versement de ses gains sur le compte indiqué ci-dessus.</label></div>
+      </div>
+
+      <div class="card cashout-step">
+        <h3><span class="n" id="declNum">6</span>Déclarations</h3>
+        <div class="checkline"><input type="checkbox" id="dExact"><label for="dExact">J'atteste sur l'honneur que les informations et documents fournis sont exacts et m'appartiennent.</label></div>
+        <div class="checkline"><input type="checkbox" id="dOwner"><label for="dOwner">Le compte bancaire indiqué est à mon nom (ou à celui de mon représentant légal).</label></div>
+        <div class="checkline"><input type="checkbox" id="dVerify"><label for="dVerify">J'accepte que The Gamer Rich vérifie mon identité, mon âge et ma participation avant tout versement, conformément à l'<a href="cgu.html">article 8 des CGU</a>, et puisse refuser ou suspendre un retrait en cas de doute ou de fraude.</label></div>
+        <div class="checkline"><input type="checkbox" id="dTax"><label for="dTax">Je suis informé(e) que mes gains peuvent devoir être déclarés à l'administration fiscale selon ma situation, et que cette démarche m'incombe.</label></div>
+        <div class="checkline"><input type="checkbox" id="dData"><label for="dData">J'accepte le traitement de mes données personnelles pour cette vérification. Elles ne sont conservées que le temps imposé par la loi et je peux exercer mes droits d'accès et de suppression (RGPD).</label></div>
+      </div>
+
+      <div id="err" style="color:var(--pink-2);font-size:.85rem;margin-bottom:12px"></div>
+      <button class="btn btn-cashout btn-block" id="submitBtn">💸 Envoyer ma demande de cashout</button>
+      <p style="font-size:.72rem;color:var(--text-faint);text-align:center;margin-top:10px">Délai de vérification habituel : 2 à 5 jours ouvrés. Tu seras prévenu(e) du résultat.</p>
+      ${historyHtml()}
+    </div>`;
+
+  document.getElementById('email').value = user.email || '';
+  document.getElementById('dob').addEventListener('change', updateMinorStep);
+  document.getElementById('submitBtn').addEventListener('click', submit);
+}
+
+function isMinorNow(){
+  const age = computeAge(val('dob'));
+  return age!=null && age < 18;
+}
+function updateMinorStep(){
+  const minor = isMinorNow();
+  document.getElementById('minorStep').hidden = !minor;
+  document.getElementById('declNum').textContent = minor ? '7' : '6';
+}
+
+function pickFile(id, required){
+  const el = document.getElementById(id);
+  const f = el && el.files[0];
+  if(!f) return required ? { error:'missing' } : { file:null };
+  if(f.size > MAX_FILE_MB*1024*1024) return { error:'size' };
+  return { file:f };
+}
+
+async function submit(){
+  const err = document.getElementById('err');
+  const fail = msg=>{ err.textContent = msg; err.scrollIntoView({ behavior:'smooth', block:'center' }); };
+  err.textContent = '';
+
+  const available = cashoutAvailable(db, user);
+  const amount = Math.round(parseFloat(val('amount'))*100)/100;
+  if(!(amount >= CASHOUT_MIN)) return fail(`Le montant minimum est de ${fmtMoney(CASHOUT_MIN,'€')}.`);
+  if(amount > available) return fail(`Tu ne peux pas retirer plus de ${fmtMoney(available,'€')}.`);
+
+  const required = ['lastName','firstName','dob','birthPlace','nationality','phone','email','street','zip','city','idNumber','idExpiry','holder','iban','bic'];
+  if(required.some(id=>!val(id))) return fail('Merci de remplir tous les champs obligatoires.');
+  const age = computeAge(val('dob'));
+  if(age < 13) return fail('Date de naissance invalide.');
+  if(new Date(val('idExpiry')) < new Date()) return fail("Ta pièce d'identité est expirée : utilise un document en cours de validité.");
+  if(!isValidIban(val('iban'))) return fail("L'IBAN saisi n'est pas valide. Vérifie-le sur ton RIB.");
+  if(!/^[A-Za-z]{6}[A-Za-z0-9]{2}([A-Za-z0-9]{3})?$/.test(val('bic').replace(/\s+/g,''))) return fail("Le BIC saisi n'est pas valide (8 ou 11 caractères).");
+
+  const minor = age < 18;
+  const files = {
+    proofAddress: pickFile('proofAddress', true),
+    idFront: pickFile('idFront', true),
+    idBack: pickFile('idBack', val('idType')!=='passeport'),
+    selfie: pickFile('selfie', true),
+    ribFile: pickFile('ribFile', true),
+  };
+  if(minor){
+    if(!val('repLastName') || !val('repFirstName') || !val('repPhone') || !val('repEmail')) return fail('Merci de remplir les informations de ton représentant légal.');
+    files.repId = pickFile('repId', true);
+    if(!checked('repConsent')) return fail("L'autorisation de ton représentant légal est obligatoire.");
+  }
+  if(Object.values(files).some(f=>f.error==='missing')) return fail('Il manque un ou plusieurs documents à joindre.');
+  if(Object.values(files).some(f=>f.error==='size')) return fail(`Chaque document doit peser moins de ${MAX_FILE_MB} Mo.`);
+  if(!['dExact','dOwner','dVerify','dTax','dData'].every(checked)) return fail('Tu dois cocher toutes les déclarations pour continuer.');
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = 'Envoi en cours…';
+
+  // Les documents vont dans IndexedDB (comme les vidéos) : trop lourds pour
+  // localStorage. La demande n'en garde que la clé et le nom du fichier.
+  const id = 'co_' + Date.now();
+  const docs = {};
+  for(const [key, f] of Object.entries(files)){
+    if(!f.file) continue;
+    const storeKey = `kyc_${id}_${key}`;
+    const ok = await saveVideoBlob(storeKey, f.file);
+    if(!ok){ btn.disabled = false; btn.textContent = '💸 Envoyer ma demande de cashout'; return fail("Impossible d'enregistrer les documents. Réessaie."); }
+    docs[key] = { key:storeKey, name:f.file.name };
+  }
+
+  const iban = val('iban').replace(/\s+/g,'').toUpperCase();
+  db.cashouts.push({
+    id, userId:user.id, amount, status:'en_verification', createdAt:new Date().toISOString(),
+    identity:{ lastName:val('lastName'), firstName:val('firstName'), dob:val('dob'), birthPlace:val('birthPlace'), nationality:val('nationality'), phone:val('phone'), email:val('email') },
+    address:{ street:val('street'), street2:val('street2'), zip:val('zip'), city:val('city'), country:val('addrCountry') },
+    idDoc:{ type:val('idType'), number:val('idNumber'), expiry:val('idExpiry') },
+    bank:{ holder:val('holder'), iban, ibanMasked:maskIban(iban), bic:val('bic').replace(/\s+/g,'').toUpperCase(), bankName:val('bankName') },
+    legalRep: minor ? { lastName:val('repLastName'), firstName:val('repFirstName'), link:val('repLink'), phone:val('repPhone'), email:val('repEmail'), consentAt:new Date().toISOString() } : null,
+    declarations:{ acceptedAt:new Date().toISOString(), cguVersion: typeof CGU_VERSION!=='undefined' ? CGU_VERSION : null },
+    docs, adminNote:'',
+  });
+  saveDB(db);
+  toast('✅ Demande envoyée ! Vérification sous 2 à 5 jours ouvrés.');
+  window.scrollTo({ top:0, behavior:'smooth' });
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
