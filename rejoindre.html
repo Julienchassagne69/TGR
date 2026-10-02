@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rejoins la communauté — The Gamer Rich</title>
+<link rel="stylesheet" href="css/style.css?v=34">
+<script src="js/launch.js?v=34"></script>
+<script>if(isLaunched()) location.replace('index.html');</script>
+<style>
+.waitlist{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 16px;
+  background:linear-gradient(180deg,rgba(24,15,43,.55) 0%,rgba(24,15,43,.88) 70%,var(--bg) 100%),url('img/backgrounds/04-vip-night.jpg') center/cover no-repeat;
+}
+.waitlist-card{max-width:560px;width:100%;text-align:center}
+.countdown{margin:0 auto 30px}
+.countdown .when{font-size:.95rem;font-weight:600;color:var(--text-dim);margin-bottom:12px}
+.countdown .when b{color:var(--gold)}
+.countdown .units{display:flex;justify-content:center;gap:12px}
+.countdown .unit{min-width:92px;padding:12px 8px 10px;border-radius:var(--radius);background:rgba(44,28,71,.85);border:1px solid rgba(255,210,63,.45);backdrop-filter:blur(8px)}
+.countdown .unit .v{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.4rem,9vw,3.4rem);line-height:1;letter-spacing:.03em;color:var(--gold)}
+.countdown .unit .l{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);margin-top:4px}
+@media(max-width:400px){.countdown .unit{min-width:0;flex:1}}
+.waitlist-card .logo{justify-content:center;font-size:2.2rem;margin-bottom:26px}
+.waitlist-card h1{font-size:clamp(2.6rem,8vw,4.2rem);line-height:1;margin-bottom:10px}
+.waitlist-card .lead{font-size:1.05rem;color:var(--text-dim);margin:0 0 28px}
+.waitlist-form{display:flex;gap:10px;background:rgba(44,28,71,.85);border:1px solid var(--line);border-radius:999px;padding:6px;backdrop-filter:blur(8px)}
+.waitlist-form input{flex:1;min-width:0;background:transparent;border:none;color:var(--text);font-size:1rem;padding:12px 16px}
+.waitlist-form input:focus{outline:none}
+.waitlist-legal{font-size:.72rem;color:var(--text-faint);margin-top:14px}
+.waitlist-err{color:var(--pink-2);font-size:.85rem;min-height:1.2em;margin-top:10px}
+.waitlist-ok{
+  background:rgba(61,220,132,.12);border:1px solid rgba(61,220,132,.5);border-radius:var(--radius-lg);padding:26px 20px;
+}
+.waitlist-ok .big{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;letter-spacing:.03em;color:#3ddc84;line-height:1}
+.waitlist-ok p{margin:10px 0 0;color:#a8f0c8;font-size:.95rem}
+.waitlist-count{margin-top:30px}
+.waitlist-count .num{font-family:'Bebas Neue',sans-serif;font-size:clamp(3.2rem,10vw,4.8rem);line-height:1;letter-spacing:.03em;background:var(--grad-text);-webkit-background-clip:text;background-clip:text;color:transparent}
+.waitlist-count .num.bump{animation:countBump .5s ease}
+.waitlist-count .label{color:var(--text-dim);font-size:.95rem}
+@keyframes countBump{40%{transform:scale(1.12)}}
+.donate-card{
+  margin-top:34px;text-align:left;padding:24px;border-radius:var(--radius-lg);
+  background:linear-gradient(160deg,rgba(255,210,63,.14),rgba(44,28,71,.9) 55%);border:1px solid rgba(255,210,63,.45);backdrop-filter:blur(8px);
+}
+.donate-card h2{margin:0 0 4px;font-size:1.9rem}
+.donate-card .total{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;color:var(--gold);line-height:1;margin:6px 0 2px}
+.donate-card .total-label{font-size:.78rem;color:var(--text-faint);margin-bottom:12px}
+.donate-card p{color:var(--text-dim);font-size:.92rem;margin:0 0 16px}
+.donate-how{background:none;border:none;color:var(--text-dim);font-size:.82rem;padding:0;margin-top:14px;display:inline-flex;align-items:center;gap:6px;text-decoration:underline;text-underline-offset:3px}
+.donate-how .dot{width:18px;height:18px;border-radius:50%;background:var(--gold);color:#2a1a00;font-weight:800;font-size:.7rem;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.donate-split{margin-top:14px}
+.donate-split .bar{display:flex;height:12px;border-radius:999px;overflow:hidden;margin-bottom:12px}
+.donate-split .row{display:flex;align-items:center;gap:10px;font-size:.85rem;padding:5px 0;color:var(--text)}
+.donate-split .row b{min-width:42px;text-align:right;font-family:'Bebas Neue',sans-serif;font-size:1.25rem;font-weight:400;letter-spacing:.03em}
+.donate-split .sw{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.donate-amounts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.donate-form .field{margin-bottom:12px}
+.donate-form .field input{background:rgba(24,15,43,.7)}
+.donate-form .field input:disabled{opacity:.45}
+.donate-form .checkline{margin-bottom:14px}
+.donate-err{color:var(--pink-2);font-size:.82rem;min-height:1.1em;margin:8px 0 0}
+.donor-list{margin-top:22px;border-top:1px solid var(--line);padding-top:16px}
+.donor-list h3{margin:0 0 10px;font-size:1.4rem}
+.donor-list .rank-row{background:rgba(24,15,43,.55);padding:10px 14px}
+.brand-card{margin-top:18px;padding:20px 24px;border-radius:var(--radius-lg);background:rgba(44,28,71,.85);border:1px solid var(--line);backdrop-filter:blur(8px);display:flex;align-items:center;gap:16px;flex-wrap:wrap;text-align:left}
+.brand-card .txt{flex:1;min-width:220px}
+.brand-card h3{margin:0 0 2px;font-size:1.5rem}
+.brand-card p{margin:0;color:var(--text-dim);font-size:.88rem}
+.donor-list .anon{color:var(--text-faint);font-style:italic;font-weight:600}
+@media(max-width:520px){
+  .waitlist-form{flex-direction:column;border-radius:var(--radius-lg)}
+  .waitlist-form .btn{width:100%}
+}
+</style>
+</head>
+<body>
+<main class="waitlist">
+  <div class="waitlist-card">
+    <div class="countdown" aria-live="polite">
+      <div class="when">🚀 La plateforme ouvrira le <b id="launchWhen">1er novembre à minuit</b></div>
+      <div class="units">
+        <div class="unit"><div class="v" id="cdDays">--</div><div class="l">jours</div></div>
+        <div class="unit"><div class="v" id="cdHours">--</div><div class="l">heures</div></div>
+        <div class="unit"><div class="v" id="cdMinutes">--</div><div class="l">minutes</div></div>
+      </div>
+    </div>
+    <div class="logo">THE GAMER <span class="rich">RICH</span></div>
+    <h1>Rejoins la <span class="gradient-text">communauté</span></h1>
+    <p class="lead">Inscris-toi sur notre liste et sois parmi les premiers à entrer le jour du lancement.</p>
+    <div id="formZone">
+      <form class="waitlist-form" id="waitlistForm" novalidate>
+        <input type="email" id="email" placeholder="ton@email.com" autocomplete="email" required>
+        <button type="submit" class="btn btn-primary" id="joinBtn">Je m'inscris</button>
+      </form>
+      <div class="waitlist-err" id="err"></div>
+      <p class="waitlist-legal">Ton e-mail sert uniquement à te prévenir du lancement de The Gamer Rich. Tu peux demander sa suppression à tout moment.</p>
+    </div>
+    <div class="waitlist-count" id="countZone">
+      <div class="num" id="countNum">0</div>
+      <div class="label">joueurs déjà inscrits</div>
+    </div>
+    <div class="donate-card">
+      <h2>💝 Fais un don</h2>
+      <div id="donTotalZone">
+        <div class="total" id="donTotal">0 €</div>
+        <div class="total-label">déjà donnés par la communauté</div>
+      </div>
+      <p>Donne pour la communauté : nous allions nos forces pour proposer des défis toujours plus fous, avec des sommes toujours plus folles.</p>
+      <div id="donateZone"></div>
+      <div><button type="button" class="donate-how" id="howBtn" aria-expanded="false"><span class="dot">i</span>Comment sont dépensés les dons ?</button></div>
+      <div class="donate-split" id="split" hidden></div>
+      <div class="donor-list" id="donorZone">
+        <h3>🏆 Nos donateurs</h3>
+        <div id="donorList"><div style="text-align:center;padding:10px 0 4px;color:var(--text-faint);font-size:.88rem">Sois le premier à donner !</div></div>
+      </div>
+    </div>
+    <div class="brand-card">
+      <div class="txt">
+        <h3>🏢 Vous êtes une marque ?</h3>
+        <p>Vous voulez sponsoriser un défi ? Écrivez-nous à <b>partenariats@thegamerrich.com</b></p>
+      </div>
+      <a href="mailto:partenariats@thegamerrich.com?subject=Sponsoriser%20un%20d%C3%A9fi%20The%20Gamer%20Rich" class="btn btn-outline btn-sm">✉️ Nous contacter</a>
+    </div>
+  </div>
+</main>
+
+<script>
+const DONE_KEY = 'tgr_waitlist_done';
+const launchLabel = LAUNCH_DATE.toLocaleDateString('fr-FR', { day:'numeric', month:'long' });
+
+/* ---------- compte à rebours jusqu'à LAUNCH_DATE ----------
+   À zéro, on recharge : js/launch.js laisse alors passer vers le vrai site
+   et le script en tête de cette page redirige vers l'accueil. */
+(function(){
+  const d = LAUNCH_DATE.getDate();
+  const month = LAUNCH_DATE.toLocaleDateString('fr-FR', { month:'long' });
+  document.getElementById('launchWhen').textContent = `${d===1 ? '1er' : d} ${month} à minuit`;
+  const pad = n=> String(n).padStart(2,'0');
+  function tick(){
+    const left = LAUNCH_DATE - new Date();
+    if(left <= 0){ location.reload(); return; }
+    const mins = Math.ceil(left / 60000);
+    document.getElementById('cdDays').textContent = Math.floor(mins / 1440);
+    document.getElementById('cdHours').textContent = pad(Math.floor(mins % 1440 / 60));
+    document.getElementById('cdMinutes').textContent = pad(mins % 60);
+    setTimeout(tick, Math.min(left, (left % 60000) || 60000) + 50);
+  }
+  tick();
+})();
+
+function showSuccess(){
+  document.getElementById('formZone').innerHTML = `
+    <div class="waitlist-ok">
+      <div class="big">✅ À très vite !</div>
+      <p>Ton inscription est bien enregistrée. Rendez-vous le ${launchLabel} pour le lancement officiel.</p>
+    </div>`;
+}
+
+/* ---------- compteur d'inscrits ----------
+   Lus dans l'onglet "Compteur" du Google Sheet publié en CSV (voir
+   js/launch.js). Google met ce CSV en cache quelques minutes : le chiffre
+   suit les inscriptions avec un léger retard, d'où le +1 immédiat affiché
+   à la personne qui vient de s'inscrire. */
+let shownCount = 0;
+function animateCount(to){
+  const el = document.getElementById('countNum');
+  const from = shownCount, start = performance.now(), dur = from ? 600 : 1400;
+  shownCount = to;
+  el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
+  (function step(t){
+    const k = Math.min(1, (t-start)/dur), eased = 1 - Math.pow(1-k, 3);
+    el.textContent = fmtCount(Math.round(from + (to-from)*eased));
+    if(k < 1) requestAnimationFrame(step);
+  })(start);
+}
+function fmtCount(n){ return n.toLocaleString('fr-FR'); }
+function csvNumber(line){
+  const cells = (line||'').split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+  const raw = (cells[1]||'').replace(/["\s€\u00a0\u202f]/g,'').replace(',','.');
+  const n = parseFloat(raw);
+  return isFinite(n) ? n : null;
+}
+async function loadStats(){
+  if(!WAITLIST_STATS_CSV) return;
+  try{
+    const res = await fetch(WAITLIST_STATS_CSV + (WAITLIST_STATS_CSV.includes('?')?'&':'?') + 't=' + Date.now());
+    if(!res.ok) return;
+    const lines = (await res.text()).trim().split(/\r?\n/);
+    const count = csvNumber(lines[0]);
+    if(count!=null && count > shownCount){
+      document.getElementById('countZone').hidden = false;
+      animateCount(count);
+    }
+  }catch(e){}
+}
+loadStats();
+setInterval(loadStats, 60000);
+
+/* ---------- dons : formulaire puis liste des donateurs ----------
+   Fonctionnement détaillé dans js/launch.js (section Dons). */
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+function fmtEuro(n){
+  return n.toLocaleString('fr-FR', { minimumFractionDigits: n%1 ? 2 : 0, maximumFractionDigits:2 }) + ' €';
+}
+function parseEuro(str){
+  const n = parseFloat(String(str||'').replace(/["\s€  ]/g,'').replace(',','.'));
+  return isFinite(n) ? n : null;
+}
+// Lecteur CSV complet (champs entre guillemets, virgules et retours à la
+// ligne dans un pseudo) : le split naïf du compteur ne suffit pas ici.
+function parseCsv(text){
+  const rows = []; let row = [], cell = '', quoted = false;
+  for(let i=0; i<text.length; i++){
+    const ch = text[i];
+    if(quoted){
+      if(ch==='"' && text[i+1]==='"'){ cell += '"'; i++; }
+      else if(ch==='"') quoted = false;
+      else cell += ch;
+    } else if(ch==='"') quoted = true;
+    else if(ch===','){ row.push(cell); cell = ''; }
+    else if(ch==='\n' || ch==='\r'){
+      if(ch==='\r' && text[i+1]==='\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += ch;
+  }
+  if(cell || row.length){ row.push(cell); rows.push(row); }
+  return rows;
+}
+
+const donationReady = !!(DONATION_FORM.formId && DONATION_FORM.amountField) && Object.values(DONATION_LINKS).some(Boolean);
+// Avant branchement (pas de formulaire ni de liens Stripe), le formulaire
+// s'affiche quand même en entier ; seule la validation est bloquée.
+const fixedAmounts = donationReady ? DONATION_AMOUNTS.filter(a=>DONATION_LINKS[a]) : DONATION_AMOUNTS;
+const showFreeAmount = donationReady ? !!DONATION_LINKS.libre : true;
+let donAmount = fixedAmounts.includes(10) ? 10 : (fixedAmounts[0] || 'libre');
+
+function renderDonateForm(){
+  const zone = document.getElementById('donateZone');
+  const isFree = donAmount==='libre';
+  zone.innerHTML = `
+    <div class="donate-form">
+      <div class="donate-amounts">
+        ${fixedAmounts.map(a=>`<button type="button" class="btn btn-sm ${a===donAmount?'btn-cashout':'btn-outline'}" data-amount="${a}">${a} €</button>`).join('')}
+        ${showFreeAmount ? `<button type="button" class="btn btn-sm ${isFree?'btn-cashout':'btn-outline'}" data-amount="libre">Autre montant</button>` : ''}
+      </div>
+      ${isFree ? `<div class="field"><label for="donFree">Montant (€)</label><input id="donFree" type="number" min="1" step="1" placeholder="15"></div>` : ''}
+      <div class="field"><label for="donPseudo">Ton pseudo</label><input id="donPseudo" maxlength="24" autocomplete="nickname" placeholder="Il apparaîtra dans la liste des donateurs"></div>
+      <div class="checkline"><input type="checkbox" id="donAnon"><label for="donAnon">Rester anonyme (ton pseudo ne sera pas affiché)</label></div>
+      <button type="button" class="btn btn-cashout btn-block" id="donBtn">💝 Valider mon don${isFree ? '' : ' de '+donAmount+' €'}</button>
+      <div class="donate-err" id="donErr"></div>
+    </div>`;
+  zone.querySelectorAll('[data-amount]').forEach(b=> b.addEventListener('click', ()=>{
+    const pseudo = document.getElementById('donPseudo').value, anon = document.getElementById('donAnon').checked;
+    donAmount = b.dataset.amount==='libre' ? 'libre' : +b.dataset.amount;
+    renderDonateForm();
+    document.getElementById('donPseudo').value = pseudo;
+    document.getElementById('donAnon').checked = anon;
+    document.getElementById('donPseudo').disabled = anon;
+  }));
+  document.getElementById('donAnon').addEventListener('change', e=>{
+    document.getElementById('donPseudo').disabled = e.target.checked;
+  });
+  document.getElementById('donBtn').addEventListener('click', submitDonation);
+}
+
+async function submitDonation(){
+  const err = document.getElementById('donErr');
+  err.textContent = '';
+  const anon = document.getElementById('donAnon').checked;
+  const pseudo = document.getElementById('donPseudo').value.trim();
+  const amount = donAmount==='libre' ? Math.round(+document.getElementById('donFree').value) : donAmount;
+  if(!(amount >= 1)){ err.textContent = 'Indique le montant de ton don.'; return; }
+  if(!anon && !pseudo){ err.textContent = 'Indique ton pseudo, ou coche « Rester anonyme ».'; return; }
+  if(!donationReady){ err.textContent = 'Le paiement des dons ouvre très bientôt, reviens dans quelques jours !'; return; }
+
+  const btn = document.getElementById('donBtn');
+  btn.disabled = true; btn.textContent = 'Redirection vers le paiement…';
+  const ref = 'DON-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2,5).toUpperCase();
+  const body = new FormData();
+  if(DONATION_FORM.refField) body.append(DONATION_FORM.refField, ref);
+  if(DONATION_FORM.pseudoField) body.append(DONATION_FORM.pseudoField, anon ? '' : pseudo);
+  body.append(DONATION_FORM.amountField, String(amount));
+  if(DONATION_FORM.anonField) body.append(DONATION_FORM.anonField, anon ? 'oui' : 'non');
+  try{
+    await fetch(`https://docs.google.com/forms/d/e/${DONATION_FORM.formId}/formResponse`, { method:'POST', mode:'no-cors', body });
+  }catch(e){
+    btn.disabled = false; btn.textContent = '💝 Valider mon don';
+    err.textContent = 'Connexion impossible. Vérifie ta connexion internet et réessaie.';
+    return;
+  }
+  const link = donAmount==='libre' ? DONATION_LINKS.libre : DONATION_LINKS[donAmount];
+  location.href = link + (link.includes('?')?'&':'?') + 'client_reference_id=' + encodeURIComponent(ref);
+}
+
+// Seules les lignes marquées "oui" dans la colonne Payé sont affichées et
+// comptées. Colonnes repérées par leur titre (celui des questions du
+// formulaire), pour ne pas dépendre de leur ordre dans le tableau.
+async function loadDonors(){
+  if(!DONORS_CSV) return;
+  try{
+    const res = await fetch(DONORS_CSV + (DONORS_CSV.includes('?')?'&':'?') + 't=' + Date.now());
+    if(!res.ok) return;
+    const [head, ...rows] = parseCsv(await res.text());
+    if(!head) return;
+    const norm = h=> h.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+    const col = key=> head.findIndex(h=> norm(h).includes(key));
+    const cDate = col('horodat'), cPseudo = col('pseudo'), cAmount = col('montant'), cAnon = col('anonym'), cPaid = col('pay');
+    if(cAmount<0 || cPaid<0) return;
+    const donors = rows
+      .filter(r=> /^(oui|yes|ok|x)$/i.test((r[cPaid]||'').trim()))
+      .map(r=>({
+        date: cDate>=0 ? (r[cDate]||'').split(' ')[0] : '',
+        pseudo: cPseudo>=0 ? (r[cPseudo]||'').trim() : '',
+        anon: cAnon>=0 && /^oui$/i.test((r[cAnon]||'').trim()),
+        amount: parseEuro(r[cAmount]) || 0,
+      }))
+      .filter(d=> d.amount > 0)
+      .reverse();
+    const total = donors.reduce((a,d)=>a+d.amount, 0);
+    document.getElementById('donTotalZone').hidden = false;
+    document.getElementById('donTotal').textContent = fmtEuro(total);
+    if(!donors.length) return;
+    document.getElementById('donorList').innerHTML = donors.slice(0, 30).map(d=>`
+      <div class="rank-row">
+        <div class="rank-name">${d.anon || !d.pseudo ? '<span class="anon">Anonyme</span>' : escapeHtml(d.pseudo)}${d.date ? `<small>${escapeHtml(d.date)}</small>` : ''}</div>
+        <div class="rank-value">${fmtEuro(d.amount)}</div>
+      </div>`).join('');
+  }catch(e){}
+}
+
+renderDonateForm();
+loadDonors();
+setInterval(loadDonors, 60000);
+
+const splitTotal = DONATION_SPLIT.reduce((a,x)=>a+x.pct,0);
+document.getElementById('split').innerHTML = `
+  <div class="bar">${DONATION_SPLIT.map(x=>`<span style="width:${x.pct/splitTotal*100}%;background:${x.color}"></span>`).join('')}</div>
+  ${DONATION_SPLIT.map(x=>`<div class="row"><b style="color:${x.color}">${x.pct} %</b><span class="sw" style="background:${x.color}"></span>${x.label}</div>`).join('')}`;
+document.getElementById('howBtn').addEventListener('click', e=>{
+  const split = document.getElementById('split');
+  split.hidden = !split.hidden;
+  e.currentTarget.setAttribute('aria-expanded', String(!split.hidden));
+});
+
+try{ if(localStorage.getItem(DONE_KEY)) showSuccess(); }catch(e){}
+
+const form = document.getElementById('waitlistForm');
+if(form) form.addEventListener('submit', async e=>{
+  e.preventDefault();
+  const err = document.getElementById('err');
+  const email = document.getElementById('email').value.trim();
+  err.textContent = '';
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ err.textContent = 'Merci d\'entrer une adresse e-mail valide.'; return; }
+  if(!waitlistReady()){ err.textContent = 'Les inscriptions ouvrent très bientôt, reviens dans un instant !'; return; }
+
+  const btn = document.getElementById('joinBtn');
+  btn.disabled = true; btn.textContent = 'Envoi…';
+  // Google Forms n'autorise pas la lecture de sa réponse depuis un autre
+  // site (mode no-cors) : on ne peut détecter qu'une coupure réseau, pas un
+  // refus — d'où l'importance d'un formulaire sans autre champ obligatoire.
+  const body = new FormData();
+  body.append(WAITLIST_FORM.emailField, email);
+  try{
+    await fetch(`https://docs.google.com/forms/d/e/${WAITLIST_FORM.formId}/formResponse`, { method:'POST', mode:'no-cors', body });
+    try{ localStorage.setItem(DONE_KEY, '1'); }catch(e2){}
+    showSuccess();
+    animateCount(shownCount + 1);
+  }catch(e2){
+    btn.disabled = false; btn.textContent = 'Je m\'inscris';
+    err.textContent = 'Connexion impossible. Vérifie ta connexion internet et réessaie.';
+  }
+});
+</script>
+</body>
+</html>
