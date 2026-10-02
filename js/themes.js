@@ -10,7 +10,7 @@
 const SEASON_THEMES = {
   halloween: {
     // Jusqu'à l'ouverture de la plateforme : minuit pile, nuit d'Halloween.
-    start: new Date('2026-10-24T00:00:00+02:00'),
+    start: new Date('2026-10-02T00:00:00+02:00'),
     end:   new Date('2026-11-01T00:00:00+01:00'),
     banner: `<b>🎃 Joyeux Halloween ! 👻</b><span>La plateforme ouvre à minuit pile, la nuit d'Halloween… si tu l'oses.</span>`,
     css: `
