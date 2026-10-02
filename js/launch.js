@@ -10,10 +10,12 @@
    pas le site derrière un formulaire qui ne transmettrait les e-mails nulle
    part.
 
-   Aperçu pour l'équipe : ouvrir n'importe quelle page avec ?apercu=tgr2026
-   donne accès au vrai site sur ce navigateur (?apercu=off pour revenir à la
-   vue visiteur). Ce n'est pas une protection — le code est public — juste
-   un moyen de continuer à travailler sur le site avant l'ouverture. */
+   Accès admin : bouton "Accéder à la plateforme" en bas de rejoindre.html.
+   Le bon code ouvre le vrai site sur ce navigateur (?apercu=off pour
+   revenir à la vue visiteur). Seule l'empreinte SHA-256 du code figure ici,
+   jamais le code lui-même — le dépôt est public. Ce n'est pas une vraie
+   protection (un code à 8 chiffres se retrouve par essais), juste une porte
+   discrète en attendant un serveur. */
 const LAUNCH_DATE = new Date('2026-11-01T00:00:00+01:00');
 
 // Google Forms : identifiant du formulaire (dans son lien public, entre
@@ -56,19 +58,26 @@ const DONATION_SPLIT = [
   { pct:2,  label:'Achat de cadeaux pour les joueurs', color:'var(--orange)' },
 ];
 
-const PREVIEW_KEY = 'tgr_apercu', PREVIEW_CODE = 'tgr2026';
+const PREVIEW_KEY = 'tgr_apercu';
+const ADMIN_CODE_HASH = 'b26f8898a5b0549a88569192ac7128950bf29b82ce4ddc1e48516e5b071c9c3b'; // sha256('tgr:' + code)
 
 function isLaunched(){ return new Date() >= LAUNCH_DATE; }
 function waitlistReady(){ return !!(WAITLIST_FORM.formId && WAITLIST_FORM.emailField); }
+async function unlockPreview(code){
+  const bytes = new TextEncoder().encode('tgr:' + code);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const hex = Array.from(new Uint8Array(digest), b=> b.toString(16).padStart(2,'0')).join('');
+  if(hex!==ADMIN_CODE_HASH) return false;
+  try{ localStorage.setItem(PREVIEW_KEY, '1'); }catch(e){}
+  return true;
+}
 function hasPreviewAccess(){
   try{ return localStorage.getItem(PREVIEW_KEY)==='1'; }catch(e){ return false; }
 }
 
 (function(){
-  const code = new URLSearchParams(location.search).get('apercu');
   try{
-    if(code===PREVIEW_CODE) localStorage.setItem(PREVIEW_KEY, '1');
-    if(code==='off') localStorage.removeItem(PREVIEW_KEY);
+    if(new URLSearchParams(location.search).get('apercu')==='off') localStorage.removeItem(PREVIEW_KEY);
   }catch(e){}
   const onWaitlistPage = /rejoindre\.html$/.test(location.pathname);
   if(!onWaitlistPage && waitlistReady() && !isLaunched() && !hasPreviewAccess()){

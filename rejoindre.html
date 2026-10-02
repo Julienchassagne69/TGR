@@ -67,6 +67,12 @@
 .brand-card .txt{flex:1;min-width:220px}
 .brand-card h3{margin:0 0 2px;font-size:1.5rem}
 .brand-card p{margin:0;color:var(--text-dim);font-size:.88rem}
+.admin-access{margin-top:34px}
+.admin-access .btn{opacity:.75}
+.admin-access .btn:hover{opacity:1}
+.admin-form{display:flex;gap:8px;justify-content:center;margin-top:12px}
+.admin-form input{width:170px;padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:rgba(24,15,43,.8);color:var(--text);font-size:.95rem;text-align:center;letter-spacing:.2em}
+.admin-form input:focus{outline:none;border-color:var(--gold)}
 .donor-list .anon{color:var(--text-faint);font-style:italic;font-weight:600}
 @media(max-width:520px){
   .waitlist-form{flex-direction:column;border-radius:var(--radius-lg)}
@@ -122,6 +128,14 @@
       </div>
       <a href="mailto:partenariats@thegamerrich.com?subject=Sponsoriser%20un%20d%C3%A9fi%20The%20Gamer%20Rich" class="btn btn-outline btn-sm">✉️ Nous contacter</a>
     </div>
+    <div class="admin-access">
+      <button type="button" class="btn btn-ghost btn-sm" id="adminBtn">🔐 Accéder à la plateforme</button>
+      <form class="admin-form" id="adminForm" hidden>
+        <input type="password" id="adminCode" inputmode="numeric" autocomplete="off" placeholder="Code" aria-label="Code d'accès admin">
+        <button type="submit" class="btn btn-gold btn-sm">Entrer</button>
+      </form>
+      <div class="waitlist-err" id="adminErr"></div>
+    </div>
   </div>
 </main>
 
@@ -148,6 +162,24 @@ const launchLabel = LAUNCH_DATE.toLocaleDateString('fr-FR', { day:'numeric', mon
   }
   tick();
 })();
+
+/* ---------- accès admin (voir js/launch.js) ---------- */
+document.getElementById('adminBtn').addEventListener('click', ()=>{
+  const f = document.getElementById('adminForm');
+  f.hidden = !f.hidden;
+  if(!f.hidden) document.getElementById('adminCode').focus();
+});
+document.getElementById('adminForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const err = document.getElementById('adminErr');
+  err.textContent = '';
+  if(await unlockPreview(document.getElementById('adminCode').value.trim())){
+    location.href = 'index.html';
+  } else {
+    err.textContent = 'Code incorrect.';
+    document.getElementById('adminCode').value = '';
+  }
+});
 
 function showSuccess(){
   document.getElementById('formZone').innerHTML = `
